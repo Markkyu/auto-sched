@@ -1,299 +1,359 @@
 """
-University Course Scheduling Solver using Google OR-Tools
-This implementation demonstrates how to use Google's CP-SAT solver for university course scheduling
+University Course Scheduler using Google OR-Tools
+
+This module implements a constraint satisfaction approach to university course scheduling
+using Google's OR-Tools CP-SAT solver. It handles complex constraints such as:
+- Room capacity requirements
+- Teacher availability
+- Course hours and patterns (MWF vs TTh)
+- Time slot preferences
+- Department-specific constraints
+
+Author: Mark
 """
 
 from ortools.sat.python import cp_model
-from typing import List, Dict, Tuple, Optional
-import random
+import logging
 import time
 
+# Configure logging
+logging.basicConfig(level=logging.INFO, 
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 class ScheduleSolver:
-    """
-    Advanced scheduling solver for university courses using OR-Tools CP-SAT
-    Handles complex constraints including room capacity, teacher availability, and course prerequisites
-    """
+    """Handles university course scheduling using constraint programming."""
     
     def __init__(self):
-        self.courses = []
+        """Initialize the scheduler with empty containers for courses, rooms, and constraints."""
+        self.courses = {}
+        self.rooms = {}
         self.teachers = set()
-        self.rooms = {}  # room_id -> capacity
-        self.time_slots = [f"{hour}:00" for hour in range(8, 18)]
-        self.days = ["mon", "tue", "wed", "thu", "fri"]
-        self.day_patterns = {
-            "MWF": ["mon", "wed", "fri"],
-            "TTh": ["tue", "thu"],
-            "any": self.days
-        }
+        self.departments = {}
         
-    def add_course(self, code: str, name: str, teacher: str, hours: int, 
-                 preferred_days: str = 'any', priority: int = 3, 
-                 min_room_capacity: int = 30) -> None:
+        # Define standard time slots
+        self.mwf_slots = [
+            "08:00-08:50", "09:00-09:50", "10:00-10:50", "11:00-11:50",
+            "12:00-12:50", "13:00-13:50", "14:00-14:50", "15:00-15:50",
+            "16:00-16:50", "17:00-17:50"
+        ]
+        
+        self.tth_slots = [
+            "08:00-09:15", "09:30-10:45", "11:00-12:15", "12:30-13:45",
+            "14:00-15:15", "15:30-16:45", "17:00-18:15"
+        ]
+        
+        self.days = {
+            "MWF": ["Monday", "Wednesday", "Friday"],
+            "TTh": ["Tuesday", "Thursday"]
+        }
+
+    def add_course(self, code, name, teacher, hours, preferred_days=None, 
+                  min_room_capacity=0, department=None, priority=1):
         """
-        Add a course to be scheduled
+        Add a course to be scheduled.
         
         Args:
-            code: Course code (e.g., CS101)
+            code: Course code (e.g., 'CS101')
             name: Course name
-            teacher: Teacher name
-            hours: Hours per week (1-10)
-            preferred_days: Preferred days pattern ('MWF', 'TTh', or 'any')
-            priority: Priority level (1-5, where 5 is highest)
-            min_room_capacity: Minimum room capacity required
+            teacher: Teacher's name
+            hours: Number of hours per week (typically 3)
+            preferred_days: 'MWF' or 'TTh' or None for any
+            min_room_capacity: Minimum required room capacity
+            department: Department code for department-specific constraints
+            priority: Priority level (1-10, higher means more important to schedule)
         """
-        self.courses.append({
-            'code': code,
+        self.courses[code] = {
             'name': name,
             'teacher': teacher,
             'hours': hours,
             'preferred_days': preferred_days,
-            'priority': priority,
-            'min_room_capacity': min_room_capacity
-        })
+            'min_room_capacity': min_room_capacity,
+            'department': department,
+            'priority': priority
+        }
+        
         self.teachers.add(teacher)
-    
-    def add_room(self, room_id: str, capacity: int) -> None:
+        
+        if department:
+            if department not in self.departments:
+                self.departments[department] = []
+            self.departments[department].append(code)
+            
+        logger.info(f"Added course: {code} - {name} taught by {teacher}")
+        
+    def add_room(self, room_id, capacity, features=None):
         """
-        Add a room with specified capacity
+        Add a room that can be used for scheduling.
         
         Args:
             room_id: Room identifier (e.g., 'A101')
-            capacity: Room capacity (number of students)
+            capacity: Room capacity (number of seats)
+            features: List of special features the room has
         """
-        self.rooms[room_id] = capacity
-    
-    def solve(self, time_limit_seconds: int = 30) -> Dict:
+        self.rooms[room_id] = {
+            'capacity': capacity,
+            'features': features or []
+        }
+        logger.info(f"Added room: {room_id} with capacity {capacity}")
+        
+    def solve(self, time_limit_seconds=60):
         """
-        Solve the scheduling problem
+        Solve the scheduling problem using CP-SAT solver.
         
         Args:
-            time_limit_seconds: Maximum time to spend solving (in seconds)
-        
+            time_limit_seconds: Maximum time to spend solving
+            
         Returns:
-            Dictionary with results including the schedule and statistics
+            Dictionary with schedule and statistics
         """
-        # If no rooms added, create some default rooms with different capacities
-        if not self.rooms:
-            for i in range(1, 6):
-                room_id = f"R{i}01"
-                capacity = random.choice([30, 50, 100, 150, 200])
-                self.rooms[room_id] = capacity
+        start_time = time.time()
         
         # Create the CP-SAT model
         model = cp_model.CpModel()
         
-        # Sort courses by priority and hours
-        sorted_courses = sorted(self.courses, 
-                              key=lambda c: (c['priority'], c['hours']), 
-                              reverse=True)
+        # If no courses or rooms, return empty schedule
+        if not self.courses or not self.rooms:
+            logger.warning("No courses or rooms defined")
+            return {'schedule': {}, 'stats': {'status': 'No courses or rooms defined'}}
         
         # Create variables
-        # For each course, create a variable for each possible (day, time_slot, room) combination
-        assignments = {}
-        for c_idx, course in enumerate(sorted_courses):
-            for d_idx, day in enumerate(self.days):
-                # Skip days not in preferred pattern
-                if course['preferred_days'] != 'any':
-                    day_list = self.day_patterns.get(course['preferred_days'], self.days)
-                    if day not in day_list:
-                        continue
+        course_vars = {}
+        
+        # For each course, create decision variables for day, time slot, and room
+        for course_code in self.courses:
+            course = self.courses[course_code]
+            
+            # Determine which pattern this course follows (MWF or TTh)
+            pattern = course['preferred_days'] if course['preferred_days'] else "ANY"
+            
+            # Create variables for each possible assignment
+            course_vars[course_code] = {}
+            
+            # Handle MWF pattern (or ANY)
+            if pattern in ["MWF", "ANY"]:
+                for time_idx, time_slot in enumerate(self.mwf_slots):
+                    for day in self.days["MWF"]:
+                        for room_id in self.rooms:
+                            # Only consider rooms with sufficient capacity
+                            if self.rooms[room_id]['capacity'] >= course['min_room_capacity']:
+                                var_name = f"{course_code}_{day}_{time_slot}_{room_id}"
+                                course_vars[course_code][(day, time_slot, room_id)] = model.NewBoolVar(var_name)
+            
+            # Handle TTh pattern (or ANY)
+            if pattern in ["TTh", "ANY"]:
+                for time_idx, time_slot in enumerate(self.tth_slots):
+                    for day in self.days["TTh"]:
+                        for room_id in self.rooms:
+                            # Only consider rooms with sufficient capacity
+                            if self.rooms[room_id]['capacity'] >= course['min_room_capacity']:
+                                var_name = f"{course_code}_{day}_{time_slot}_{room_id}"
+                                course_vars[course_code][(day, time_slot, room_id)] = model.NewBoolVar(var_name)
+        
+        # Each course must be scheduled exactly once
+        for course_code, vars_dict in course_vars.items():
+            model.Add(sum(vars_dict.values()) == 1)
+        
+        # A room cannot be double-booked
+        for time_slot in self.mwf_slots:
+            for day in self.days["MWF"]:
+                for room_id in self.rooms:
+                    room_booked_vars = []
+                    for course_code, vars_dict in course_vars.items():
+                        for (d, t, r), var in vars_dict.items():
+                            if d == day and t == time_slot and r == room_id:
+                                room_booked_vars.append(var)
+                    if room_booked_vars:
+                        model.Add(sum(room_booked_vars) <= 1)
+        
+        for time_slot in self.tth_slots:
+            for day in self.days["TTh"]:
+                for room_id in self.rooms:
+                    room_booked_vars = []
+                    for course_code, vars_dict in course_vars.items():
+                        for (d, t, r), var in vars_dict.items():
+                            if d == day and t == time_slot and r == room_id:
+                                room_booked_vars.append(var)
+                    if room_booked_vars:
+                        model.Add(sum(room_booked_vars) <= 1)
+        
+        # A teacher cannot teach two courses at the same time
+        for teacher in self.teachers:
+            # Get all courses taught by this teacher
+            teacher_courses = [c for c, details in self.courses.items() 
+                               if details['teacher'] == teacher]
+            
+            # Check MWF time slots
+            for time_slot in self.mwf_slots:
+                for day in self.days["MWF"]:
+                    teacher_vars = []
+                    for course_code in teacher_courses:
+                        for (d, t, r), var in course_vars[course_code].items():
+                            if d == day and t == time_slot:
+                                teacher_vars.append(var)
+                    if teacher_vars:
+                        model.Add(sum(teacher_vars) <= 1)
+            
+            # Check TTh time slots
+            for time_slot in self.tth_slots:
+                for day in self.days["TTh"]:
+                    teacher_vars = []
+                    for course_code in teacher_courses:
+                        for (d, t, r), var in course_vars[course_code].items():
+                            if d == day and t == time_slot:
+                                teacher_vars.append(var)
+                    if teacher_vars:
+                        model.Add(sum(teacher_vars) <= 1)
+        
+        # Departments may have specific constraints (e.g., no department has all its courses at the same time)
+        for dept, course_codes in self.departments.items():
+            if len(course_codes) > 1:  # Only relevant if department has multiple courses
+                # Ensure department courses are spread throughout the day
+                for time_slot in self.mwf_slots:
+                    for day in self.days["MWF"]:
+                        dept_vars = []
+                        for course_code in course_codes:
+                            for (d, t, r), var in course_vars[course_code].items():
+                                if d == day and t == time_slot:
+                                    dept_vars.append(var)
+                        if dept_vars:
+                            model.Add(sum(dept_vars) <= 1)  # At most one course per department per time slot
                 
-                for t_idx, time_slot in enumerate(self.time_slots):
-                    for r_idx, (room_id, capacity) in enumerate(self.rooms.items()):
-                        # Skip rooms that are too small
-                        if capacity < course['min_room_capacity']:
-                            continue
-                        
-                        # Create a binary variable: 1 if course c is scheduled at day d, time t, room r
-                        assignments[(c_idx, d_idx, t_idx, r_idx)] = model.NewBoolVar(
-                            f'course_{c_idx}_day_{d_idx}_time_{t_idx}_room_{r_idx}')
+                for time_slot in self.tth_slots:
+                    for day in self.days["TTh"]:
+                        dept_vars = []
+                        for course_code in course_codes:
+                            for (d, t, r), var in course_vars[course_code].items():
+                                if d == day and t == time_slot:
+                                    dept_vars.append(var)
+                        if dept_vars:
+                            model.Add(sum(dept_vars) <= 1)  # At most one course per department per time slot
         
-        # Constraints
+        # Objective: maximize priority-weighted assignments
+        objective_terms = []
+        for course_code, vars_dict in course_vars.items():
+            priority = self.courses[course_code]['priority']
+            for var in vars_dict.values():
+                objective_terms.append(priority * var)
         
-        # 1. Each course must be scheduled for exactly its required hours
-        for c_idx, course in enumerate(sorted_courses):
-            model.Add(sum(assignments.get((c_idx, d_idx, t_idx, r_idx), 0)
-                        for d_idx in range(len(self.days))
-                        for t_idx in range(len(self.time_slots))
-                        for r_idx in range(len(self.rooms)))
-                    == course['hours'])
+        model.Maximize(sum(objective_terms))
         
-        # 2. Teacher can't teach multiple courses at the same time
-        for d_idx in range(len(self.days)):
-            for t_idx in range(len(self.time_slots)):
-                for teacher in self.teachers:
-                    teacher_courses = [c_idx for c_idx, course in enumerate(sorted_courses) 
-                                     if course['teacher'] == teacher]
-                    
-                    for r1_idx in range(len(self.rooms)):
-                        for r2_idx in range(len(self.rooms)):
-                            if r1_idx != r2_idx:
-                                for c1_idx in teacher_courses:
-                                    for c2_idx in teacher_courses:
-                                        if c1_idx != c2_idx:
-                                            # Teacher can't be in two places at once
-                                            if ((c1_idx, d_idx, t_idx, r1_idx) in assignments and
-                                                (c2_idx, d_idx, t_idx, r2_idx) in assignments):
-                                                model.AddBoolOr([
-                                                    assignments[(c1_idx, d_idx, t_idx, r1_idx)].Not(),
-                                                    assignments[(c2_idx, d_idx, t_idx, r2_idx)].Not()
-                                                ])
-        
-        # 3. Room can only host one course at a time
-        for d_idx in range(len(self.days)):
-            for t_idx in range(len(self.time_slots)):
-                for r_idx in range(len(self.rooms)):
-                    room_assignments = []
-                    for c_idx in range(len(sorted_courses)):
-                        if (c_idx, d_idx, t_idx, r_idx) in assignments:
-                            room_assignments.append(assignments[(c_idx, d_idx, t_idx, r_idx)])
-                    
-                    # At most one course per room at a given time
-                    if len(room_assignments) > 1:
-                        model.AddAtMostOne(room_assignments)
-        
-        # 4. Specialized constraints for common patterns
-        for c_idx, course in enumerate(sorted_courses):
-            if course['preferred_days'] == 'MWF' and course['hours'] == 3:
-                # Try to schedule MWF courses at the same time each day
-                mwf_indices = [d_idx for d_idx, day in enumerate(self.days) 
-                             if day in self.day_patterns['MWF']]
-                
-                for t_idx in range(len(self.time_slots)):
-                    for r_idx in range(len(self.rooms)):
-                        same_time_vars = []
-                        for d_idx in mwf_indices:
-                            if (c_idx, d_idx, t_idx, r_idx) in assignments:
-                                same_time_vars.append(assignments[(c_idx, d_idx, t_idx, r_idx)])
-                        
-                        # Encourage same time scheduling with a bonus
-                        if len(same_time_vars) > 1:
-                            bonus_var = model.NewBoolVar(f'bonus_same_time_{c_idx}_{t_idx}_{r_idx}')
-                            model.AddBoolAnd(same_time_vars).OnlyEnforceIf(bonus_var)
-                            # This will be used in the objective function
-        
-        # 5. Block scheduling preference (for TTh pattern)
-        for c_idx, course in enumerate(sorted_courses):
-            if course['preferred_days'] == 'TTh' and course['hours'] >= 3:
-                # Try to schedule consecutive blocks on same day
-                tth_indices = [d_idx for d_idx, day in enumerate(self.days) 
-                             if day in self.day_patterns['TTh']]
-                
-                for d_idx in tth_indices:
-                    for t_start_idx in range(len(self.time_slots) - 1):
-                        for r_idx in range(len(self.rooms)):
-                            block_vars = []
-                            for t_offset in range(min(2, len(self.time_slots) - t_start_idx)):
-                                t_idx = t_start_idx + t_offset
-                                if (c_idx, d_idx, t_idx, r_idx) in assignments:
-                                    block_vars.append(assignments[(c_idx, d_idx, t_idx, r_idx)])
-                            
-                            # Encourage block scheduling with a bonus
-                            if len(block_vars) > 1:
-                                block_bonus = model.NewBoolVar(f'bonus_block_{c_idx}_{d_idx}_{t_start_idx}_{r_idx}')
-                                model.AddBoolAnd(block_vars).OnlyEnforceIf(block_bonus)
-                                # This will be used in the objective function
-        
-        # Solve the model
+        # Create solver and solve
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = time_limit_seconds
+        
+        # Add solution callback to store all solutions found
         status = solver.Solve(model)
         
         # Process results
         schedule = {}
-        for day in self.days:
-            schedule[day] = {}
-            for time in self.time_slots:
-                schedule[day][time] = []
-        
-        scheduled_courses = []
-        unscheduled_courses = []
+        stats = {
+            'status': solver.StatusName(status),
+            'solve_time': time.time() - start_time,
+            'branches': solver.NumBranches(),
+            'conflicts': solver.NumConflicts(),
+            'objective_value': solver.ObjectiveValue() if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE else None
+        }
         
         if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
-            for c_idx, course in enumerate(sorted_courses):
-                course_scheduled = False
-                for d_idx, day in enumerate(self.days):
-                    for t_idx, time in enumerate(self.time_slots):
-                        for r_idx, (room_id, _) in enumerate(self.rooms.items()):
-                            if ((c_idx, d_idx, t_idx, r_idx) in assignments and 
-                                solver.Value(assignments[(c_idx, d_idx, t_idx, r_idx)]) == 1):
-                                schedule[day][time].append({
-                                    'code': course['code'],
-                                    'name': course['name'],
-                                    'teacher': course['teacher'],
-                                    'room': room_id
-                                })
-                                course_scheduled = True
-                
-                if course_scheduled:
-                    scheduled_courses.append(course['code'])
-                else:
-                    unscheduled_courses.append(course['code'])
+            for course_code, vars_dict in course_vars.items():
+                schedule[course_code] = []
+                for (day, time_slot, room_id), var in vars_dict.items():
+                    if solver.Value(var) == 1:
+                        schedule[course_code].append({
+                            'day': day,
+                            'time': time_slot,
+                            'room': room_id
+                        })
+                        logger.info(f"Scheduled {course_code} on {day} at {time_slot} in room {room_id}")
             
-            result = {
-                'success': True,
-                'schedule': schedule,
-                'scheduled_count': len(scheduled_courses),
-                'total_count': len(sorted_courses),
-                'scheduled_courses': scheduled_courses,
-                'unscheduled_courses': unscheduled_courses,
-                'solving_time': solver.WallTime(),
-                'message': "Schedule generated successfully"
-            }
+            logger.info(f"Schedule successfully generated. "
+                       f"Status: {stats['status']}, "
+                       f"Time: {stats['solve_time']:.2f}s, "
+                       f"Objective: {stats['objective_value']}")
         else:
-            result = {
-                'success': False,
-                'schedule': schedule,
-                'scheduled_count': 0,
-                'total_count': len(sorted_courses),
-                'message': "No feasible solution found"
-            }
+            logger.warning(f"Could not find a valid schedule. Status: {stats['status']}")
         
-        return result
+        return {
+            'schedule': schedule,
+            'stats': stats
+        }
 
 def example_usage():
-    """Example demonstration of the scheduler"""
-    # Create a new solver
+    """Example of how to use the ScheduleSolver."""
     solver = ScheduleSolver()
     
-    # Add some rooms
+    # Add rooms
     solver.add_room("A101", 30)
     solver.add_room("B205", 50)
-    solver.add_room("C301", 100)
-    solver.add_room("D102", 150)
+    solver.add_room("C110", 100)
+    solver.add_room("D202", 25)
     
-    # Add some courses
-    solver.add_course("CS101", "Intro to Computer Science", "Prof. Smith", 3, "MWF", 5, 100)
-    solver.add_course("CS201", "Data Structures", "Prof. Johnson", 3, "TTh", 4, 50)
-    solver.add_course("MATH101", "Calculus I", "Prof. Williams", 4, "MWF", 5, 150)
-    solver.add_course("ENG210", "Creative Writing", "Prof. Davis", 3, "TTh", 3, 30)
-    solver.add_course("PHYS101", "Physics I", "Prof. Garcia", 4, "MWF", 4, 100)
-    solver.add_course("CHEM101", "Chemistry I", "Prof. Wilson", 3, "MWF", 4, 100)
-    solver.add_course("HIST101", "World History", "Prof. Anderson", 3, "TTh", 3, 50)
-    solver.add_course("ECON101", "Microeconomics", "Prof. Taylor", 3, "MWF", 3, 150)
-    solver.add_course("PSYCH101", "Intro to Psychology", "Prof. Thomas", 3, "TTh", 4, 150)
-    solver.add_course("ART101", "Art History", "Prof. Brown", 2, "TTh", 2, 30)
+    # Add courses
+    solver.add_course(
+        code="CS101",
+        name="Introduction to Computer Science",
+        teacher="Prof. Smith",
+        hours=3,
+        preferred_days="MWF",
+        min_room_capacity=30,
+        department="CS",
+        priority=5
+    )
+    
+    solver.add_course(
+        code="CS201",
+        name="Data Structures",
+        teacher="Prof. Jones",
+        hours=3,
+        preferred_days="TTh",
+        min_room_capacity=25,
+        department="CS",
+        priority=4
+    )
+    
+    solver.add_course(
+        code="MATH101",
+        name="Calculus I",
+        teacher="Prof. Brown",
+        hours=3,
+        preferred_days="MWF",
+        min_room_capacity=100,
+        department="MATH",
+        priority=5
+    )
+    
+    solver.add_course(
+        code="ENG210",
+        name="Technical Writing",
+        teacher="Prof. Smith",  # Note: Same teacher as CS101
+        hours=3,
+        preferred_days="TTh",
+        min_room_capacity=25,
+        department="ENG",
+        priority=3
+    )
     
     # Solve the scheduling problem
-    start_time = time.time()
-    result = solver.solve(time_limit_seconds=10)
-    end_time = time.time()
+    result = solver.solve(time_limit_seconds=30)
     
-    # Print results
-    print(f"Scheduling completed in {end_time - start_time:.2f} seconds")
-    print(f"Scheduled {result['scheduled_count']} out of {result['total_count']} courses")
-    
-    if result['success']:
-        print("\nSchedule:")
-        for day in solver.days:
-            print(f"\n{day.upper()}:")
-            for time_slot in solver.time_slots:
-                courses = result['schedule'][day][time_slot]
-                if courses:
-                    courses_str = ", ".join([f"{c['code']} ({c['room']})" for c in courses])
-                    print(f"  {time_slot}: {courses_str}")
+    # Print the schedule
+    if result['stats']['status'] in ['OPTIMAL', 'FEASIBLE']:
+        print("\nGenerated Schedule:")
+        print("-" * 50)
+        for course_code, assignments in result['schedule'].items():
+            course = solver.courses[course_code]
+            print(f"Course: {course_code} - {course['name']}")
+            print(f"Teacher: {course['teacher']}")
+            for assignment in assignments:
+                print(f"  Day: {assignment['day']}, Time: {assignment['time']}, Room: {assignment['room']}")
+            print()
     else:
-        print("Failed to generate a schedule")
+        print(f"No schedule could be generated. Status: {result['stats']['status']}")
+
+    return result
 
 if __name__ == "__main__":
+    print("University Course Scheduler")
+    print("==========================")
     example_usage()
