@@ -1,0 +1,394 @@
+/* Base Styles */
+:root {
+    --primary-color: #3498db;
+    --secondary-color: #2c3e50;
+    --accent-color: #e74c3c;
+    --light-color: #ecf0f1;
+    --dark-color: #34495e;
+    --success-color: #2ecc71;
+    --warning-color: #f39c12;
+    --shadow: 0 1px 5px rgba(0, 0, 0, 0.15);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Roboto', sans-serif;
+    line-height: 1.6;
+    color: var(--dark-color);
+    background-color: #f9f9f9;
+}
+
+/* Header Styles */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--primary-color);
+    color: white;
+    padding: 1rem 2rem;
+    box-shadow: var(--shadow);
+}
+
+header h1 {
+    font-weight: 500;
+    font-size: 1.8rem;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+#department-selector {
+    padding: 0.5rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+#login-btn {
+    background-color: white;
+    color: var(--primary-color);
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+#login-btn:hover {
+    background-color: var(--light-color);
+}
+
+/* Workflow Indicator */
+#workflow-indicator {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    max-width: 900px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+.workflow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    opacity: 0.6;
+    transition: all 0.3s;
+}
+
+.workflow-step.active {
+    opacity: 1;
+}
+
+.workflow-step.completed {
+    opacity: 1;
+}
+
+.step-number {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background-color: var(--secondary-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+}
+
+.active .step-number {
+    background-color: var(--primary-color);
+}
+
+.completed .step-number {
+    background-color: var(--success-color);
+}
+
+.workflow-connector {
+    flex-grow: 1;
+    height: 2px;
+    background-color: var(--secondary-color);
+    opacity: 0.3;
+    max-width: 100px;
+}
+
+/* Main Content Styles */
+main {
+    padding: 1rem 2rem 2rem;
+}
+
+.scheduling-container {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+@media (max-width: 1000px) {
+    .scheduling-container {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Form Styles */
+.form-container {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+#course-form {
+    padding: 1.5rem;
+    border-bottom: 1px solid #eee;
+}
+
+#course-form h2, .course-queue h2 {
+    margin-bottom: 1rem;
+    color: var(--secondary-color);
+    font-weight: 500;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--dark-color);
+}
+
+.form-group input, .form-group select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #2980b9;
+}
+
+button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+#add-course-btn {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+/* Queue Styles */
+.course-queue {
+    padding: 1.5rem;
+}
+
+#queue-list {
+    list-style: none;
+    margin-bottom: 1rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.queue-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--light-color);
+    padding: 0.8rem;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.queue-item-info {
+    flex-grow: 1;
+}
+
+.course-code {
+    font-weight: 500;
+    display: block;
+}
+
+.teacher-name {
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.remove-course-btn {
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.queue-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+#generate-schedule-btn {
+    flex-grow: 1;
+    background-color: var(--success-color);
+}
+
+#clear-queue-btn {
+    background-color: var(--accent-color);
+}
+
+/* Timetable Styles */
+.timetable-container {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    padding: 1.5rem;
+    position: relative;
+}
+
+.timetable-container h2 {
+    margin-bottom: 1rem;
+    color: var(--secondary-color);
+    font-weight: 500;
+}
+
+.timetable-controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.timetable-wrapper {
+    overflow-x: auto;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+#timetable {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 650px;
+}
+
+#timetable th, #timetable td {
+    border: 1px solid #ddd;
+    padding: 0.5rem;
+    text-align: center;
+}
+
+#timetable th {
+    background-color: var(--secondary-color);
+    color: white;
+    font-weight: 500;
+    position: sticky;
+    top: 0;
+}
+
+.time-slot {
+    font-weight: 500;
+    background-color: var(--light-color);
+}
+
+.course-cell {
+    background-color: rgba(52, 152, 219, 0.1);
+    border-radius: 4px;
+    padding: 0.5rem;
+}
+
+.course-cell.conflict {
+    background-color: rgba(231, 76, 60, 0.1);
+    color: var(--accent-color);
+}
+
+.course-name {
+    font-weight: 500;
+    display: block;
+    font-size: 0.85rem;
+}
+
+.course-teacher {
+    font-size: 0.75rem;
+    color: #666;
+}
+
+/* Loading Indicator */
+#loading-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.9);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s ease-in-out infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.hidden {
+    display: none;
+}
+
+.status-message {
+    background-color: var(--light-color);
+    padding: 0.8rem;
+    border-radius: 4px;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+}
+
+/* Footer Styles */
+footer {
+    background-color: var(--secondary-color);
+    color: white;
+    text-align: center;
+    padding: 1rem;
+    margin-top: 2rem;
+    font-size: 0.85rem;
+}
