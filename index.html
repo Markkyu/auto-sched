@@ -3,231 +3,542 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Auto-Sched | University Course Scheduling</title>
-    <meta name="description" content="Automated university course scheduling application">
-    
-    <!-- Stylesheets -->
+    <title>University Course Scheduler</title>
     <link rel="stylesheet" href="styles.css">
-    
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Material Icons -->
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="app-container">
-        <!-- Header Section -->
-        <header>
-            <div class="logo">
-                <span class="material-icons">schedule</span>
-                <h1>Auto-Sched</h1>
+    <header>
+        <div class="container">
+            <h1>University Course Scheduler</h1>
+            <p>Optimize your university course timetable with constraint-based scheduling</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="workflow">
+            <div class="step active">
+                <div class="step-number">1</div>
+                <div class="step-text">Add Courses</div>
             </div>
-            <nav>
-                <ul>
-                    <li><a href="#" class="active">Home</a></li>
-                    <li><a href="#about">About</a></li>
-                    <li><a href="#contact">Contact</a></li>
-                </ul>
-            </nav>
-        </header>
-        
-        <!-- Main Content Section -->
-        <main>
-            <!-- Workflow Steps -->
-            <div class="workflow-container">
-                <div class="workflow-steps">
-                    <div class="workflow-step active" data-step="1">
-                        <span class="step-number">1</span>
-                        <span class="step-text">Add Courses</span>
-                    </div>
-                    <div class="workflow-line"></div>
-                    <div class="workflow-step" data-step="2">
-                        <span class="step-number">2</span>
-                        <span class="step-text">Review Queue</span>
-                    </div>
-                    <div class="workflow-line"></div>
-                    <div class="workflow-step" data-step="3">
-                        <span class="step-number">3</span>
-                        <span class="step-text">Generate Schedule</span>
-                    </div>
-                </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-text">Review Queue</div>
             </div>
-            
-            <!-- Course Management Section -->
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-text">Generate Schedule</div>
+            </div>
+        </section>
+
+        <div class="content-container">
             <section class="course-management">
-                <div class="card form-card">
-                    <h2>Add Course</h2>
-                    <form id="course-form">
+                <div class="card">
+                    <h2>Add Course to Queue</h2>
+                    <form id="courseForm">
                         <div class="form-group">
-                            <label for="course-code">Course Code*</label>
-                            <input type="text" id="course-code" placeholder="e.g., CS101" required>
+                            <label for="courseName">Course Name</label>
+                            <input type="text" id="courseName" placeholder="Introduction to Computer Science" required>
                         </div>
                         
                         <div class="form-group">
-                            <label for="course-name">Course Name*</label>
-                            <input type="text" id="course-name" placeholder="e.g., Introduction to Programming" required>
+                            <label for="courseCode">Course Code</label>
+                            <input type="text" id="courseCode" placeholder="CS101" required>
                         </div>
                         
                         <div class="form-group">
-                            <label for="teacher">Teacher*</label>
-                            <input type="text" id="teacher" placeholder="e.g., Dr. Smith" required>
+                            <label for="teacher">Teacher</label>
+                            <input type="text" id="teacher" placeholder="Dr. Smith">
                         </div>
                         
                         <div class="form-group">
-                            <label for="duration">Duration (hours)*</label>
-                            <select id="duration" required>
-                                <option value="1">1</option>
-                                <option value="2">2</option>
-                                <option value="3">3</option>
+                            <label for="hours">Course Hours</label>
+                            <select id="hours">
+                                <option value="1">1 Hour</option>
+                                <option value="2" selected>2 Hours</option>
+                                <option value="3">3 Hours</option>
+                                <option value="4">4 Hours</option>
                             </select>
                         </div>
                         
                         <div class="form-group">
-                            <label for="preferred-days">Preferred Days</label>
-                            <select id="preferred-days">
-                                <option value="Any">Any</option>
-                                <option value="MWF">Monday, Wednesday, Friday</option>
-                                <option value="TTh">Tuesday, Thursday</option>
-                                <option value="Monday">Monday</option>
-                                <option value="Tuesday">Tuesday</option>
-                                <option value="Wednesday">Wednesday</option>
-                                <option value="Thursday">Thursday</option>
-                                <option value="Friday">Friday</option>
-                            </select>
+                            <label>Preferred Days</label>
+                            <div class="checkbox-group">
+                                <label><input type="checkbox" name="preferredDays" value="Monday"> Monday</label>
+                                <label><input type="checkbox" name="preferredDays" value="Tuesday"> Tuesday</label>
+                                <label><input type="checkbox" name="preferredDays" value="Wednesday"> Wednesday</label>
+                                <label><input type="checkbox" name="preferredDays" value="Thursday"> Thursday</label>
+                                <label><input type="checkbox" name="preferredDays" value="Friday"> Friday</label>
+                            </div>
                         </div>
                         
                         <div class="form-group">
-                            <label for="preferred-time">Preferred Time</label>
-                            <select id="preferred-time">
-                                <option value="Any">Any</option>
-                                <option value="Morning">Morning (8AM-12PM)</option>
-                                <option value="Afternoon">Afternoon (1PM-4PM)</option>
-                                <option value="Evening">Evening (5PM-8PM)</option>
-                                <option value="8:00">8:00 AM</option>
-                                <option value="9:00">9:00 AM</option>
-                                <option value="10:00">10:00 AM</option>
-                                <option value="11:00">11:00 AM</option>
-                                <option value="12:00">12:00 PM</option>
-                                <option value="13:00">1:00 PM</option>
-                                <option value="14:00">2:00 PM</option>
-                                <option value="15:00">3:00 PM</option>
-                                <option value="16:00">4:00 PM</option>
-                                <option value="17:00">5:00 PM</option>
-                                <option value="18:00">6:00 PM</option>
-                                <option value="19:00">7:00 PM</option>
-                            </select>
+                            <label>Preferred Times</label>
+                            <div class="checkbox-group times">
+                                <label><input type="checkbox" name="preferredTimes" value="8:00 AM"> 8:00 AM</label>
+                                <label><input type="checkbox" name="preferredTimes" value="9:00 AM"> 9:00 AM</label>
+                                <label><input type="checkbox" name="preferredTimes" value="10:00 AM"> 10:00 AM</label>
+                                <label><input type="checkbox" name="preferredTimes" value="11:00 AM"> 11:00 AM</label>
+                                <label><input type="checkbox" name="preferredTimes" value="12:00 PM"> 12:00 PM</label>
+                                <label><input type="checkbox" name="preferredTimes" value="1:00 PM"> 1:00 PM</label>
+                                <label><input type="checkbox" name="preferredTimes" value="2:00 PM"> 2:00 PM</label>
+                                <label><input type="checkbox" name="preferredTimes" value="3:00 PM"> 3:00 PM</label>
+                                <label><input type="checkbox" name="preferredTimes" value="4:00 PM"> 4:00 PM</label>
+                                <label><input type="checkbox" name="preferredTimes" value="5:00 PM"> 5:00 PM</label>
+                                <label><input type="checkbox" name="preferredTimes" value="6:00 PM"> 6:00 PM</label>
+                            </div>
                         </div>
                         
                         <div class="form-actions">
-                            <button type="submit" class="btn btn-primary">
-                                <span class="material-icons">add</span>
-                                Add to Queue
-                            </button>
+                            <button type="button" id="addCourse" class="btn primary">Add to Queue</button>
+                            <button type="reset" class="btn secondary">Clear</button>
                         </div>
                     </form>
                 </div>
-                
-                <div class="card queue-card">
+            </section>
+
+            <section class="course-queue">
+                <div class="card">
                     <h2>Course Queue</h2>
-                    <ul id="course-queue-list" class="course-queue">
-                        <!-- Course items will be added here dynamically -->
-                    </ul>
+                    <div class="queue-controls">
+                        <div class="queue-stats">
+                            <span id="queueCount">0</span> courses in queue
+                        </div>
+                        <button id="clearQueue" class="btn danger" disabled>Clear Queue</button>
+                    </div>
+                    <div id="courseQueue" class="queue-container">
+                        <div class="empty-queue">
+                            <p>No courses added yet</p>
+                            <p class="hint">Add courses using the form on the left</p>
+                        </div>
+                    </div>
                     <div class="queue-actions">
-                        <button id="clear-queue" class="btn btn-text" disabled>
-                            <span class="material-icons">clear_all</span>
-                            Clear Queue
-                        </button>
-                        <button id="generate-schedule" class="btn btn-primary" disabled>
-                            <span class="material-icons">event</span>
-                            Generate Schedule
-                        </button>
+                        <button id="generateSchedule" class="btn primary" disabled>Generate Schedule</button>
                     </div>
                 </div>
             </section>
-            
-            <!-- Schedule Section -->
-            <section class="schedule-section">
-                <div class="card schedule-card">
+        </div>
+
+        <section id="scheduleSection" class="schedule-section hidden">
+            <div class="card">
+                <div class="card-header">
                     <h2>Generated Schedule</h2>
-                    
-                    <!-- Status Messages Container -->
-                    <div id="status-container" class="status-container"></div>
-                    
-                    <!-- Loading Indicator -->
-                    <div id="loading-indicator" class="loading-indicator hidden">
-                        <div class="spinner"></div>
-                        <p>Generating optimal schedule...</p>
-                    </div>
-                    
-                    <!-- Schedule Table -->
-                    <div class="schedule-table-container">
-                        <table id="schedule-table" class="schedule-table">
-                            <thead>
-                                <tr>
-                                    <th>Time</th>
-                                    <th>Monday</th>
-                                    <th>Tuesday</th>
-                                    <th>Wednesday</th>
-                                    <th>Thursday</th>
-                                    <th>Friday</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Schedule will be generated here -->
-                            </tbody>
+                    <button id="backToForm" class="btn secondary">Back to Form</button>
+                </div>
+                
+                <div id="scheduleLoading" class="loading-indicator">
+                    <div class="spinner"></div>
+                    <p>Generating your optimal schedule...</p>
+                </div>
+                
+                <div id="scheduleContainer" class="schedule-container">
+                    <div class="timetable-container">
+                        <table id="scheduleTable" class="timetable">
+                            <!-- Schedule will be inserted here -->
                         </table>
                     </div>
                     
-                    <div class="schedule-actions">
-                        <button id="regenerate-schedule" class="btn btn-secondary" disabled>
-                            <span class="material-icons">refresh</span>
-                            Regenerate
-                        </button>
-                        <button id="export-schedule" class="btn btn-primary" disabled>
-                            <span class="material-icons">download</span>
-                            Export Schedule
-                        </button>
+                    <div id="unassignedCourses" class="unassigned-courses">
+                        <h3>Unassigned Courses</h3>
+                        <ul id="unassignedList"></ul>
                     </div>
                 </div>
-            </section>
-        </main>
-        
-        <!-- Footer Section -->
-        <footer>
-            <div class="footer-content">
-                <div class="footer-section">
-                    <h3>Auto-Sched</h3>
-                    <p>A powerful tool for automated university course scheduling</p>
+                
+                <div id="scheduleSummary" class="schedule-summary">
+                    <div class="summary-stat">
+                        <span class="summary-label">Total Courses</span>
+                        <span id="totalCourses" class="summary-value">0</span>
+                    </div>
+                    <div class="summary-stat">
+                        <span class="summary-label">Assigned</span>
+                        <span id="assignedCourses" class="summary-value">0</span>
+                    </div>
+                    <div class="summary-stat">
+                        <span class="summary-label">Unassigned</span>
+                        <span id="unassignedCount" class="summary-value">0</span>
+                    </div>
                 </div>
                 
-                <div class="footer-section">
-                    <h3>Quick Links</h3>
-                    <ul>
-                        <li><a href="#">Home</a></li>
-                        <li><a href="#about">About</a></li>
-                        <li><a href="#contact">Contact</a></li>
-                    </ul>
-                </div>
-                
-                <div class="footer-section">
-                    <h3>Contact</h3>
-                    <p>
-                        <span class="material-icons">email</span>
-                        contact@auto-sched.com
-                    </p>
+                <div id="scheduleActions" class="schedule-actions">
+                    <button id="printSchedule" class="btn secondary">Print Schedule</button>
+                    <button id="exportSchedule" class="btn primary">Export to CSV</button>
                 </div>
             </div>
+        </section>
+
+        <div id="statusMessage" class="status-message"></div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2023 University Course Scheduler</p>
+            <p>Built with constraint-based scheduling algorithms</p>
+        </div>
+    </footer>
+
+    <script src="schedule-solver.js"></script>
+    <script>
+        // Global variables
+        const USE_API = false; // Set to true to use the Python API backend
+        const API_URL = 'http://localhost:5000/generate-schedule';
+        let courseQueue = [];
+
+        // DOM Elements
+        const courseForm = document.getElementById('courseForm');
+        const addCourseBtn = document.getElementById('addCourse');
+        const clearQueueBtn = document.getElementById('clearQueue');
+        const generateScheduleBtn = document.getElementById('generateSchedule');
+        const courseQueueEl = document.getElementById('courseQueue');
+        const queueCountEl = document.getElementById('queueCount');
+        const scheduleSection = document.getElementById('scheduleSection');
+        const scheduleContainer = document.getElementById('scheduleContainer');
+        const scheduleLoading = document.getElementById('scheduleLoading');
+        const scheduleTable = document.getElementById('scheduleTable');
+        const unassignedList = document.getElementById('unassignedList');
+        const totalCoursesEl = document.getElementById('totalCourses');
+        const assignedCoursesEl = document.getElementById('assignedCourses');
+        const unassignedCountEl = document.getElementById('unassignedCount');
+        const backToFormBtn = document.getElementById('backToForm');
+        const statusMessageEl = document.getElementById('statusMessage');
+        const printScheduleBtn = document.getElementById('printSchedule');
+        const exportScheduleBtn = document.getElementById('exportSchedule');
+
+        // Initialize application
+        document.addEventListener('DOMContentLoaded', function() {
+            initApp();
+        });
+
+        function initApp() {
+            // Add event listeners
+            addCourseBtn.addEventListener('click', addCourseToQueue);
+            clearQueueBtn.addEventListener('click', clearQueue);
+            generateScheduleBtn.addEventListener('click', generateScheduleHandler);
+            backToFormBtn.addEventListener('click', backToForm);
+            printScheduleBtn.addEventListener('click', printSchedule);
+            exportScheduleBtn.addEventListener('click', exportSchedule);
             
-            <div class="footer-bottom">
-                <p>&copy; 2025 Auto-Sched. All rights reserved.</p>
-            </div>
-        </footer>
-    </div>
-    
-    <!-- Scripts -->
-    <script src="script.js"></script>
+            // Check API availability if needed
+            if (USE_API) {
+                checkApiAvailability();
+            }
+        }
+
+        function addCourseToQueue() {
+            const courseData = getCourseFormData();
+            
+            if (!courseData.courseName || !courseData.courseCode) {
+                showStatusMessage('Please enter course name and code', 'error');
+                return;
+            }
+            
+            courseQueue.push(courseData);
+            updateQueueDisplay();
+            courseForm.reset();
+            
+            showStatusMessage('Course added to queue', 'success');
+        }
+
+        function getCourseFormData() {
+            // Get form data
+            const courseName = document.getElementById('courseName').value;
+            const courseCode = document.getElementById('courseCode').value;
+            const teacher = document.getElementById('teacher').value;
+            const hours = parseInt(document.getElementById('hours').value);
+            
+            // Get preferred days
+            const preferredDays = [];
+            document.querySelectorAll('input[name="preferredDays"]:checked').forEach(checkbox => {
+                preferredDays.push(checkbox.value);
+            });
+            
+            // Get preferred times
+            const preferredTimes = [];
+            document.querySelectorAll('input[name="preferredTimes"]:checked').forEach(checkbox => {
+                preferredTimes.push(checkbox.value);
+            });
+            
+            return {
+                courseName,
+                courseCode,
+                teacher,
+                hours,
+                preferredDays,
+                preferredTimes
+            };
+        }
+
+        function updateQueueDisplay() {
+            // Update queue count
+            queueCountEl.textContent = courseQueue.length;
+            
+            // Enable/disable buttons
+            clearQueueBtn.disabled = courseQueue.length === 0;
+            generateScheduleBtn.disabled = courseQueue.length === 0;
+            
+            // Update queue display
+            courseQueueEl.innerHTML = '';
+            
+            if (courseQueue.length === 0) {
+                courseQueueEl.innerHTML = `
+                    <div class="empty-queue">
+                        <p>No courses added yet</p>
+                        <p class="hint">Add courses using the form on the left</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Add each course to the queue display
+            courseQueue.forEach((course, index) => {
+                const courseElement = document.createElement('div');
+                courseElement.className = 'queue-item';
+                
+                let preferredDaysText = course.preferredDays.length > 0 
+                    ? course.preferredDays.join(', ') 
+                    : 'Any';
+                    
+                let preferredTimesText = course.preferredTimes.length > 0 
+                    ? course.preferredTimes.join(', ') 
+                    : 'Any';
+                
+                courseElement.innerHTML = `
+                    <div class="queue-item-header">
+                        <h3>${course.courseCode} - ${course.courseName}</h3>
+                        <button class="remove-btn" data-index="${index}">✕</button>
+                    </div>
+                    <div class="queue-item-details">
+                        <p><strong>Teacher:</strong> ${course.teacher || 'Any'}</p>
+                        <p><strong>Hours:</strong> ${course.hours}</p>
+                        <p><strong>Preferred Days:</strong> ${preferredDaysText}</p>
+                        <p><strong>Preferred Times:</strong> ${preferredTimesText}</p>
+                    </div>
+                `;
+                
+                courseQueueEl.appendChild(courseElement);
+                
+                // Add event listener to remove button
+                courseElement.querySelector('.remove-btn').addEventListener('click', function() {
+                    removeCourseFromQueue(index);
+                });
+            });
+            
+            // Update workflow steps
+            document.querySelectorAll('.step')[1].classList.add('active');
+        }
+
+        function removeCourseFromQueue(index) {
+            courseQueue.splice(index, 1);
+            updateQueueDisplay();
+            showStatusMessage('Course removed from queue', 'info');
+        }
+
+        function clearQueue() {
+            courseQueue = [];
+            updateQueueDisplay();
+            showStatusMessage('Queue cleared', 'info');
+            document.querySelectorAll('.step')[1].classList.remove('active');
+        }
+
+        function generateScheduleHandler() {
+            // Show loading indicator
+            scheduleSection.classList.remove('hidden');
+            scheduleContainer.classList.add('hidden');
+            scheduleLoading.classList.remove('hidden');
+            
+            // Update workflow steps
+            document.querySelectorAll('.step')[2].classList.add('active');
+            
+            // Scroll to schedule section
+            scheduleSection.scrollIntoView({ behavior: 'smooth' });
+            
+            // Use API or local solver
+            if (USE_API && window.apiAvailable) {
+                generateScheduleWithAPI();
+            } else {
+                // If API is set but not available, show a message
+                if (USE_API && !window.apiAvailable) {
+                    showStatusMessage('API not available, using local solver', 'warning');
+                }
+                generateScheduleLocally();
+            }
+        }
+
+        function generateScheduleWithAPI() {
+            fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ courses: courseQueue })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('API request failed');
+                }
+                return response.json();
+            })
+            .then(result => {
+                displaySchedule(result);
+            })
+            .catch(error => {
+                console.error('Error generating schedule with API:', error);
+                showStatusMessage('Error communicating with API server', 'error');
+                
+                // Fallback to local solver
+                showStatusMessage('Falling back to local solver', 'info');
+                generateScheduleLocally();
+            });
+        }
+
+        function generateScheduleLocally() {
+            // Use setTimeout to allow the UI to update before running the algorithm
+            setTimeout(() => {
+                try {
+                    // Call the schedule solver
+                    const result = generateSchedule(courseQueue);
+                    
+                    // Display the schedule
+                    displaySchedule(result);
+                } catch (error) {
+                    console.error('Error generating schedule locally:', error);
+                    showStatusMessage('Error generating schedule', 'error');
+                    
+                    // Hide loading indicator
+                    scheduleLoading.classList.add('hidden');
+                }
+            }, 100);
+        }
+
+        function displaySchedule(result) {
+            // Hide loading indicator
+            scheduleLoading.classList.add('hidden');
+            
+            // Show schedule container
+            scheduleContainer.classList.remove('hidden');
+            
+            // Update schedule table
+            scheduleTable.innerHTML = '';
+            
+            // Create table from formatted schedule
+            result.formattedSchedule.forEach((row, rowIndex) => {
+                const tr = document.createElement('tr');
+                
+                // Add header class to first row
+                if (rowIndex === 0) {
+                    tr.className = 'timetable-header';
+                }
+                
+                row.forEach((cell, cellIndex) => {
+                    const td = document.createElement(rowIndex === 0 ? 'th' : 'td');
+                    
+                    // Add time-column class to first column
+                    if (cellIndex === 0) {
+                        td.className = 'time-column';
+                    }
+                    
+                    td.textContent = cell;
+                    
+                    // Add class if cell has content (for non-header cells)
+                    if (rowIndex > 0 && cellIndex > 0 && cell) {
+                        td.className += ' has-course';
+                    }
+                    
+                    tr.appendChild(td);
+                });
+                
+                scheduleTable.appendChild(tr);
+            });
+            
+            // Display unassigned courses
+            unassignedList.innerHTML = '';
+            
+            if (result.unassignedCourses.length === 0) {
+                unassignedList.innerHTML = '<li class="no-unassigned">All courses were successfully assigned!</li>';
+            } else {
+                result.unassignedCourses.forEach(course => {
+                    const li = document.createElement('li');
+                    li.textContent = `${course.courseCode} - ${course.courseName}`;
+                    unassignedList.appendChild(li);
+                });
+            }
+            
+            // Update summary statistics
+            totalCoursesEl.textContent = courseQueue.length;
+            assignedCoursesEl.textContent = result.assignedCourses.length;
+            unassignedCountEl.textContent = result.unassignedCourses.length;
+            
+            // Show success message
+            showStatusMessage('Schedule generated successfully', 'success');
+        }
+
+        function backToForm() {
+            scheduleSection.classList.add('hidden');
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+
+        function printSchedule() {
+            window.print();
+        }
+
+        function exportSchedule() {
+            // Get table data
+            const rows = Array.from(scheduleTable.querySelectorAll('tr'));
+            let csvContent = "data:text/csv;charset=utf-8,";
+            
+            rows.forEach(row => {
+                const cells = Array.from(row.querySelectorAll('th, td'));
+                const rowData = cells.map(cell => `"${cell.textContent}"`).join(',');
+                csvContent += rowData + '\r\n';
+            });
+            
+            // Create download link
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement('a');
+            link.setAttribute('href', encodedUri);
+            link.setAttribute('download', 'university_schedule.csv');
+            document.body.appendChild(link);
+            
+            // Trigger download
+            link.click();
+            document.body.removeChild(link);
+            
+            showStatusMessage('Schedule exported as CSV', 'success');
+        }
+
+        function checkApiAvailability() {
+            fetch(API_URL.replace('/generate-schedule', '/health-check'), { 
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                window.apiAvailable = response.ok;
+                if (response.ok) {
+                    console.log('API is available');
+                } else {
+                    console.warn('API is not available');
+                }
+            })
+            .catch(error => {
+                console.warn('API is not available:', error);
+                window.apiAvailable = false;
+            });
+        }
+
+        function showStatusMessage(message, type = 'info') {
+            statusMessageEl.textContent = message;
+            statusMessageEl.className = `status-message ${type}`;
+            statusMessageEl.classList.add('visible');
+            
+            // Auto hide after 3 seconds
+            setTimeout(() => {
+                statusMessageEl.classList.remove('visible');
+            }, 3000);
+        }
+    </script>
 </body>
 </html>
