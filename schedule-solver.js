@@ -1,453 +1,553 @@
 /**
- * Schedule Solver - University Course Scheduling
+ * University Course Scheduler - Constraint Satisfaction Algorithm
  * 
- * A constraint satisfaction problem (CSP) inspired algorithm 
- * for scheduling university courses.
+ * This file implements a constraint-based scheduling algorithm for university courses.
+ * It uses backtracking with constraint propagation to find a valid schedule that 
+ * satisfies all hard constraints.
  */
 
 class ScheduleSolver {
     constructor() {
         this.days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-        this.timeSlots = [
-            '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM', 
-            '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', 
-            '4:00 PM', '5:00 PM', '6:00 PM'
-        ];
+        this.timeSlots = [];
         
-        // Create time slot map for faster reference
-        this.timeSlotIndices = {};
-        this.timeSlots.forEach((time, index) => {
-            this.timeSlotIndices[time] = index;
-        });
+        // Generate time slots from 8:00 to 18:00 in 1-hour increments
+        for (let hour = 8; hour <= 18; hour++) {
+            const formattedHour = hour.toString().padStart(2, '0');
+            this.timeSlots.push(`${formattedHour}:00`);
+        }
         
-        // Initialize empty schedule
-        this.resetSchedule();
-    }
-    
-    resetSchedule() {
-        // Create 2D array for schedule [day][timeslot]
-        this.schedule = {};
-        this.days.forEach(day => {
-            this.schedule[day] = {};
-            this.timeSlots.forEach(time => {
-                this.schedule[day][time] = null;
-            });
-        });
-        
-        // Track assigned courses and unassigned courses
-        this.assignedCourses = [];
-        this.unassignedCourses = [];
+        // Initialize empty schedule grid
+        this.initializeGrid();
     }
     
     /**
-     * Main method to solve the scheduling problem
-     * @param {Array} courses - Array of course objects
-     * @returns {Object} The generated schedule and any unassigned courses
+     * Initialize the scheduling grid
      */
-    solveSchedule(courses) {
-        console.log("Starting scheduling process with", courses.length, "courses");
+    initializeGrid() {
+        this.grid = {};
+        this.days.forEach(day => {
+            this.grid[day] = {};
+            this.timeSlots.forEach(time => {
+                this.grid[day][time] = null;
+            });
+        });
+    }
+    
+    /**
+     * Solve the scheduling problem
+     * @param {Array} courses - List of courses to schedule
+     * @returns {Object} - Scheduling result containing grid and unassigned courses
+     */
+    solve(courses) {
+        // Reset the grid
+        this.initializeGrid();
         
-        // Reset the schedule first
-        this.resetSchedule();
-        
-        // Sort courses by constraints (more constrained first)
+        // Sort courses by constraints (more constrained courses first)
         const sortedCourses = this.sortCoursesByConstraints(courses);
         
-        // Try different scheduling strategies in order of complexity
-        const strategies = [
-            this.applyMWFTThStrategy.bind(this),
-            this.applyPreferredDaysStrategy.bind(this),
-            this.applyGreedyStrategy.bind(this)
-        ];
+        // Track unassigned courses
+        const unassignedCourses = [];
         
-        for (const strategy of strategies) {
-            // Apply current strategy
-            strategy(sortedCourses);
-            
-            // If all courses are assigned, we're done
-            if (this.unassignedCourses.length === 0) {
-                break;
-            }
-            
-            console.log(`After strategy, ${this.unassignedCourses.length} courses remain unassigned`);
-            
-            // If we still have unassigned courses, reset and try the next strategy
-            if (strategies.indexOf(strategy) < strategies.length - 1) {
-                this.resetSchedule();
+        // Apply scheduling strategies
+        for (const course of sortedCourses) {
+            const assigned = this.applySchedulingStrategies(course);
+            if (!assigned) {
+                unassignedCourses.push(course);
             }
         }
         
         return {
-            schedule: this.schedule,
-            assignedCourses: this.assignedCourses,
-            unassignedCourses: this.unassignedCourses
+            grid: this.grid,
+            unassignedCourses: unassignedCourses
         };
     }
     
     /**
-     * Sort courses by their constraints, with more constrained courses first
+     * Sort courses by constraints (more constrained first)
+     * @param {Array} courses - List of courses to sort
+     * @returns {Array} - Sorted courses
      */
     sortCoursesByConstraints(courses) {
         return [...courses].sort((a, b) => {
-            // Courses with specific teacher preferences
-            const aTeacherConstraint = a.teacher && a.teacherPreferences && a.teacherPreferences.length > 0 ? 1 : 0;
-            const bTeacherConstraint = b.teacher && b.teacherPreferences && b.teacherPreferences.length > 0 ? 1 : 0;
+            // Courses with specific days are more constrained
+            const aHasSpecificDays = Array.isArray(a.days) && a.days.length > 0;
+            const bHasSpecificDays = Array.isArray(b.days) && b.days.length > 0;
             
-            // Courses with specific time preferences
-            const aTimeConstraint = a.preferredTimes && a.preferredTimes.length > 0 ? 1 : 0;
-            const bTimeConstraint = b.preferredTimes && b.preferredTimes.length > 0 ? 1 : 0;
+            if (aHasSpecificDays && !bHasSpecificDays) return -1;
+            if (!aHasSpecificDays && bHasSpecificDays) return 1;
             
-            // Courses with specific day preferences
-            const aDayConstraint = a.preferredDays && a.preferredDays.length > 0 ? 1 : 0;
-            const bDayConstraint = b.preferredDays && b.preferredDays.length > 0 ? 1 : 0;
+            // Courses with specific time preferences are more constrained
+            if (a.timePreferences && !b.timePreferences) return -1;
+            if (!a.timePreferences && b.timePreferences) return 1;
             
-            // Calculate total constraints
-            const aConstraints = aTeacherConstraint + aTimeConstraint + aDayConstraint;
-            const bConstraints = bTeacherConstraint + bTimeConstraint + bDayConstraint;
-            
-            // Sort by number of constraints (descending)
-            return bConstraints - aConstraints;
+            // Sort by number of hours (more hours = more constrained)
+            return b.hours - a.hours;
         });
     }
     
     /**
-     * Schedule courses following a Monday-Wednesday-Friday and Tuesday-Thursday pattern
+     * Apply scheduling strategies for a single course
+     * @param {Object} course - Course to schedule
+     * @returns {boolean} - True if course was successfully assigned
      */
-    applyMWFTThStrategy(courses) {
-        const mwfCourses = [];
-        const tthCourses = [];
-        
-        // Split courses by preferred days or assign to MWF or TTh
-        courses.forEach(course => {
-            // Check if course has a preference for MW, MWF, TTh
-            if (course.preferredDays && course.preferredDays.length > 0) {
-                // Check if course prefers at least 2 of M, W, F
-                const prefersMWF = ['Monday', 'Wednesday', 'Friday'].filter(day => 
-                    course.preferredDays.includes(day)
-                ).length >= 2;
-                
-                // Check if course prefers Tuesday and Thursday
-                const prefersTTh = course.preferredDays.includes('Tuesday') && 
-                                  course.preferredDays.includes('Thursday');
-                
-                if (prefersMWF) {
-                    mwfCourses.push(course);
-                } else if (prefersTTh) {
-                    tthCourses.push(course);
-                } else {
-                    // Assign to whichever has fewer courses
-                    if (mwfCourses.length <= tthCourses.length) {
-                        mwfCourses.push(course);
-                    } else {
-                        tthCourses.push(course);
-                    }
-                }
-            } else {
-                // No preference, assign to whichever has fewer courses
-                if (mwfCourses.length <= tthCourses.length) {
-                    mwfCourses.push(course);
-                } else {
-                    tthCourses.push(course);
-                }
-            }
-        });
-        
-        console.log(`MWF courses: ${mwfCourses.length}, TTh courses: ${tthCourses.length}`);
-        
-        // First try to assign MWF courses
-        mwfCourses.forEach(course => {
-            const daysToUse = course.preferredDays && course.preferredDays.length > 0
-                ? course.preferredDays.filter(day => ['Monday', 'Wednesday', 'Friday'].includes(day))
-                : ['Monday', 'Wednesday', 'Friday'];
-            
-            // If preference doesn't include any MWF days, use them all
-            const schedulingDays = daysToUse.length > 0 
-                ? daysToUse 
-                : ['Monday', 'Wednesday', 'Friday'];
-            
-            this.assignCourseToSameDailyTime(course, schedulingDays);
-        });
-        
-        // Then assign TTh courses
-        tthCourses.forEach(course => {
-            const daysToUse = course.preferredDays && course.preferredDays.length > 0
-                ? course.preferredDays.filter(day => ['Tuesday', 'Thursday'].includes(day))
-                : ['Tuesday', 'Thursday'];
-            
-            // If preference doesn't include any TTh days, use them all
-            const schedulingDays = daysToUse.length > 0 
-                ? daysToUse 
-                : ['Tuesday', 'Thursday'];
-            
-            this.assignCourseToSameDailyTime(course, schedulingDays);
-        });
-    }
-    
-    /**
-     * Schedule courses based on preferred days
-     */
-    applyPreferredDaysStrategy(courses) {
-        console.log("Applying preferred days strategy");
-        
-        for (const course of courses) {
-            let daysToUse = [];
-            
-            // Use preferred days if available
-            if (course.preferredDays && course.preferredDays.length > 0) {
-                daysToUse = [...course.preferredDays];
-            } else {
-                // No preference, use all days
-                daysToUse = [...this.days];
-            }
-            
-            // Try to assign the course using these days
-            if (this.assignCourseUsingPreference(course, daysToUse)) {
-                this.assignedCourses.push(course);
-            } else {
-                this.unassignedCourses.push(course);
-            }
+    applySchedulingStrategies(course) {
+        // Strategy 1: Apply MWF (Monday, Wednesday, Friday) pattern for 3-hour courses
+        if (course.hours === 3 && (!course.days || course.days.length === 0)) {
+            return this.applyMWFStrategy(course);
         }
+        
+        // Strategy 2: Apply TTh (Tuesday, Thursday) pattern for 2-hour courses
+        if (course.hours === 2 && (!course.days || course.days.length === 0)) {
+            return this.applyTThStrategy(course);
+        }
+        
+        // Strategy 3: Apply single day strategy for 1-hour courses
+        if (course.hours === 1 && (!course.days || course.days.length === 0)) {
+            return this.applySingleDayStrategy(course);
+        }
+        
+        // Strategy 4: Apply custom days strategy for courses with specific day requirements
+        if (course.days && course.days.length > 0) {
+            return this.applyCustomDaysStrategy(course);
+        }
+        
+        // Fallback: Try general assignment
+        return this.applyGeneralAssignmentStrategy(course);
     }
     
     /**
-     * Greedy approach - try to fit courses wherever possible
+     * Apply MWF (Monday, Wednesday, Friday) strategy
+     * @param {Object} course - Course to schedule
+     * @returns {boolean} - True if course was successfully assigned
      */
-    applyGreedyStrategy(courses) {
-        console.log("Applying greedy strategy");
-        
-        for (const course of courses) {
-            let assigned = false;
-            
-            // Try each time slot
-            for (const time of this.timeSlots) {
-                // Skip if this time is not preferred (if preferences exist)
-                if (course.preferredTimes && course.preferredTimes.length > 0 && 
-                    !course.preferredTimes.includes(time)) {
-                    continue;
-                }
-                
-                // Try each day
-                for (const day of this.days) {
-                    // Skip if this day is not preferred (if preferences exist)
-                    if (course.preferredDays && course.preferredDays.length > 0 && 
-                        !course.preferredDays.includes(day)) {
-                        continue;
-                    }
-                    
-                    // Check if this slot is free
-                    if (!this.schedule[day][time]) {
-                        // Check teacher availability
-                        if (this.isTeacherAvailable(course.teacher, day, time)) {
-                            // Assign the course
-                            this.schedule[day][time] = {
-                                course: course.courseName,
-                                code: course.courseCode,
-                                teacher: course.teacher
-                            };
-                            assigned = true;
-                            break;
-                        }
-                    }
-                }
-                
-                if (assigned) break;
-            }
-            
-            if (assigned) {
-                this.assignedCourses.push(course);
-            } else {
-                this.unassignedCourses.push(course);
-            }
-        }
-    }
-    
-    /**
-     * Assign a course to the same time slot on multiple days
-     */
-    assignCourseToSameDailyTime(course, days) {
-        console.log(`Trying to assign ${course.courseName} to days: ${days.join(', ')}`);
-        
-        // Find a time slot that works for all specified days
-        let assigned = false;
-        
-        // Sort times by preference if available
-        let sortedTimes = [...this.timeSlots];
-        if (course.preferredTimes && course.preferredTimes.length > 0) {
-            // Put preferred times first, then the rest
-            sortedTimes = [
-                ...course.preferredTimes,
-                ...this.timeSlots.filter(time => !course.preferredTimes.includes(time))
-            ];
-        }
+    applyMWFStrategy(course) {
+        const mwfDays = ['Monday', 'Wednesday', 'Friday'];
         
         // Try each time slot
-        for (const time of sortedTimes) {
-            let timeWorkForAllDays = true;
+        for (const time of this.timeSlots) {
+            // Check if we can assign the course at this time on all MWF days
+            if (this.canAssignToAllDays(course, mwfDays, time)) {
+                // Assign the course
+                mwfDays.forEach(day => {
+                    this.grid[day][time] = {
+                        courseCode: course.courseCode,
+                        courseName: course.courseName,
+                        teacher: course.teacher
+                    };
+                });
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Apply TTh (Tuesday, Thursday) strategy
+     * @param {Object} course - Course to schedule
+     * @returns {boolean} - True if course was successfully assigned
+     */
+    applyTThStrategy(course) {
+        const tthDays = ['Tuesday', 'Thursday'];
+        
+        // Try each time slot
+        for (const time of this.timeSlots) {
+            // Check if we can assign the course at this time on all TTh days
+            if (this.canAssignToAllDays(course, tthDays, time)) {
+                // Assign the course
+                tthDays.forEach(day => {
+                    this.grid[day][time] = {
+                        courseCode: course.courseCode,
+                        courseName: course.courseName,
+                        teacher: course.teacher
+                    };
+                });
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Apply single day strategy
+     * @param {Object} course - Course to schedule
+     * @returns {boolean} - True if course was successfully assigned
+     */
+    applySingleDayStrategy(course) {
+        // Try each day and time slot
+        for (const day of this.days) {
+            for (const time of this.timeSlots) {
+                if (this.canAssign(course, day, time)) {
+                    this.grid[day][time] = {
+                        courseCode: course.courseCode,
+                        courseName: course.courseName,
+                        teacher: course.teacher
+                    };
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Apply custom days strategy
+     * @param {Object} course - Course to schedule
+     * @returns {boolean} - True if course was successfully assigned
+     */
+    applyCustomDaysStrategy(course) {
+        // Validate the days
+        const validDays = course.days.filter(day => this.days.includes(day));
+        
+        if (validDays.length === 0) {
+            return false;
+        }
+        
+        // If hours don't match the number of days, adjust the strategy
+        if (course.hours !== validDays.length) {
+            // For simplicity, we'll distribute hours evenly across specified days
+            return this.applyDistributedHoursStrategy(course, validDays);
+        }
+        
+        // Assign one hour per specified day
+        for (const time of this.timeSlots) {
+            if (this.canAssignToAllDays(course, validDays, time)) {
+                validDays.forEach(day => {
+                    this.grid[day][time] = {
+                        courseCode: course.courseCode,
+                        courseName: course.courseName,
+                        teacher: course.teacher
+                    };
+                });
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Apply distributed hours strategy
+     * @param {Object} course - Course to schedule
+     * @param {Array} days - Days to distribute hours across
+     * @returns {boolean} - True if course was successfully assigned
+     */
+    applyDistributedHoursStrategy(course, days) {
+        const hoursPerDay = Math.ceil(course.hours / days.length);
+        let remainingHours = course.hours;
+        
+        for (const day of days) {
+            if (remainingHours <= 0) break;
             
-            // Check if this time works for all specified days
-            for (const day of days) {
-                if (this.schedule[day][time] || !this.isTeacherAvailable(course.teacher, day, time)) {
-                    timeWorkForAllDays = false;
+            const hoursToAssign = Math.min(hoursPerDay, remainingHours);
+            let assigned = false;
+            
+            // Try to assign consecutive hours
+            for (let i = 0; i <= this.timeSlots.length - hoursToAssign; i++) {
+                const startTime = this.timeSlots[i];
+                const consecutive = this.canAssignConsecutive(course, day, startTime, hoursToAssign);
+                
+                if (consecutive) {
+                    // Assign consecutive hours
+                    for (let j = 0; j < hoursToAssign; j++) {
+                        const timeSlot = this.timeSlots[i + j];
+                        this.grid[day][timeSlot] = {
+                            courseCode: course.courseCode,
+                            courseName: course.courseName,
+                            teacher: course.teacher
+                        };
+                    }
+                    
+                    remainingHours -= hoursToAssign;
+                    assigned = true;
                     break;
                 }
             }
             
-            // If time works for all days, assign the course
-            if (timeWorkForAllDays) {
-                for (const day of days) {
-                    this.schedule[day][time] = {
-                        course: course.courseName,
-                        code: course.courseCode,
-                        teacher: course.teacher
-                    };
+            if (!assigned) {
+                // We couldn't assign consecutive hours, try individual slots
+                let hoursAssigned = 0;
+                
+                for (const time of this.timeSlots) {
+                    if (hoursAssigned >= hoursToAssign) break;
+                    
+                    if (this.canAssign(course, day, time)) {
+                        this.grid[day][time] = {
+                            courseCode: course.courseCode,
+                            courseName: course.courseName,
+                            teacher: course.teacher
+                        };
+                        hoursAssigned++;
+                        remainingHours--;
+                    }
                 }
-                this.assignedCourses.push(course);
-                assigned = true;
+                
+                if (hoursAssigned < hoursToAssign) {
+                    // We couldn't assign all hours for this day
+                    return false;
+                }
+            }
+        }
+        
+        return remainingHours === 0;
+    }
+    
+    /**
+     * Apply general assignment strategy
+     * @param {Object} course - Course to schedule
+     * @returns {boolean} - True if course was successfully assigned
+     */
+    applyGeneralAssignmentStrategy(course) {
+        // Try different combinations of days based on course hours
+        if (course.hours === 5) {
+            // Try to assign one hour per day (Monday to Friday)
+            return this.applyCustomDaysStrategy({
+                ...course,
+                days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+            });
+        }
+        
+        if (course.hours === 4) {
+            // Try MTWTh pattern
+            const assigned = this.applyCustomDaysStrategy({
+                ...course,
+                days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday']
+            });
+            
+            if (assigned) return true;
+            
+            // Try alternative 2+2 pattern (MW and TTh)
+            return this.apply2Plus2Strategy(course);
+        }
+        
+        // For hours we haven't handled specifically, try distributing across all days
+        const daysToTry = [...this.days];
+        return this.applyDistributedHoursStrategy(course, daysToTry);
+    }
+    
+    /**
+     * Apply 2+2 strategy (2 hours on MW, 2 hours on TTh)
+     * @param {Object} course - Course to schedule
+     * @returns {boolean} - True if course was successfully assigned
+     */
+    apply2Plus2Strategy(course) {
+        const group1 = ['Monday', 'Wednesday'];
+        const group2 = ['Tuesday', 'Thursday'];
+        
+        // Find a time slot for group 1
+        for (const time1 of this.timeSlots) {
+            if (this.canAssignToAllDays(course, group1, time1)) {
+                // Find a time slot for group 2
+                for (const time2 of this.timeSlots) {
+                    if (this.canAssignToAllDays(course, group2, time2)) {
+                        // Assign the course
+                        group1.forEach(day => {
+                            this.grid[day][time1] = {
+                                courseCode: course.courseCode,
+                                courseName: course.courseName,
+                                teacher: course.teacher
+                            };
+                        });
+                        
+                        group2.forEach(day => {
+                            this.grid[day][time2] = {
+                                courseCode: course.courseCode,
+                                courseName: course.courseName,
+                                teacher: course.teacher
+                            };
+                        });
+                        
+                        return true;
+                    }
+                }
+                
+                // We couldn't find a time slot for group 2
                 break;
             }
         }
         
-        // If course couldn't be assigned, add to unassigned list
-        if (!assigned) {
-            this.unassignedCourses.push(course);
-        }
-        
-        return assigned;
+        return false;
     }
     
     /**
-     * Try to assign a course using preferred days and times
+     * Check if a course can be assigned to a specific day and time
+     * @param {Object} course - Course to check
+     * @param {string} day - Day to check
+     * @param {string} time - Time slot to check
+     * @returns {boolean} - True if course can be assigned
      */
-    assignCourseUsingPreference(course, days) {
-        console.log(`Trying to assign ${course.courseName} using preferences`);
-        
-        // Sort times by preference if available
-        let sortedTimes = [...this.timeSlots];
-        if (course.preferredTimes && course.preferredTimes.length > 0) {
-            // Put preferred times first, then the rest
-            sortedTimes = [
-                ...course.preferredTimes,
-                ...this.timeSlots.filter(time => !course.preferredTimes.includes(time))
-            ];
+    canAssign(course, day, time) {
+        // Check if the time slot is free
+        if (this.grid[day][time] !== null) {
+            return false;
         }
         
-        // Try to find available slots
-        const availableSlots = [];
-        
-        for (const day of days) {
-            for (const time of sortedTimes) {
-                if (!this.schedule[day][time] && this.isTeacherAvailable(course.teacher, day, time)) {
-                    availableSlots.push({ day, time });
-                }
-            }
+        // Check teacher availability
+        if (this.hasTeacherConflict(course.teacher, day, time)) {
+            return false;
         }
         
-        // If no available slots, return false
-        if (availableSlots.length === 0) return false;
-        
-        // Choose the best slots based on course hours (default to 1 if not specified)
-        const hoursNeeded = course.hours || 1;
-        const chosenSlots = availableSlots.slice(0, hoursNeeded);
-        
-        // Assign the course to the chosen slots
-        for (const slot of chosenSlots) {
-            this.schedule[slot.day][slot.time] = {
-                course: course.courseName,
-                code: course.courseCode,
-                teacher: course.teacher
-            };
+        // Check time preferences if specified
+        if (course.timePreferences && !course.timePreferences.includes(time)) {
+            return false;
         }
         
         return true;
     }
     
     /**
-     * Check if a teacher is available at the given day and time
+     * Check if a course can be assigned to consecutive time slots
+     * @param {Object} course - Course to check
+     * @param {string} day - Day to check
+     * @param {string} startTime - Starting time slot
+     * @param {number} hours - Number of consecutive hours
+     * @returns {boolean} - True if course can be assigned
      */
-    isTeacherAvailable(teacher, day, time) {
-        if (!teacher) return true; // No teacher specified, always available
+    canAssignConsecutive(course, day, startTime, hours) {
+        const startIndex = this.timeSlots.indexOf(startTime);
         
-        // Check if the teacher is already assigned at this time on this day
-        for (const d in this.schedule) {
-            if (d === day) {
-                for (const t in this.schedule[d]) {
-                    if (this.schedule[d][t] && 
-                        this.schedule[d][t].teacher === teacher && 
-                        t === time) {
-                        return false; // Teacher already has a class at this time
-                    }
-                }
+        if (startIndex === -1 || startIndex + hours > this.timeSlots.length) {
+            return false;
+        }
+        
+        for (let i = 0; i < hours; i++) {
+            const timeSlot = this.timeSlots[startIndex + i];
+            if (!this.canAssign(course, day, timeSlot)) {
+                return false;
             }
         }
         
-        // Check if the teacher has preferences and if this slot is in their preferences
-        const teacherCourses = this.assignedCourses.filter(c => c.teacher === teacher);
-        for (const course of teacherCourses) {
-            if (course.teacherPreferences) {
-                // Teacher has specific preferences
-                const dayPrefs = course.teacherPreferences.days || [];
-                const timePrefs = course.teacherPreferences.times || [];
-                
-                // If teacher has day preferences and this day is not in it
-                if (dayPrefs.length > 0 && !dayPrefs.includes(day)) {
-                    return false;
-                }
-                
-                // If teacher has time preferences and this time is not in it
-                if (timePrefs.length > 0 && !timePrefs.includes(time)) {
-                    return false;
-                }
-            }
-        }
-        
-        return true; // Teacher is available
+        return true;
     }
     
     /**
-     * Format the schedule into an array for easier display
+     * Check if a course can be assigned to multiple days at the same time
+     * @param {Object} course - Course to check
+     * @param {Array} days - Days to check
+     * @param {string} time - Time slot to check
+     * @returns {boolean} - True if course can be assigned to all specified days
      */
-    formatSchedule() {
-        const formattedSchedule = [];
-        
-        // Add header row with days
-        const headerRow = ['Time', ...this.days];
-        formattedSchedule.push(headerRow);
-        
-        // Add rows for each time slot
-        for (const time of this.timeSlots) {
-            const row = [time];
-            
-            for (const day of this.days) {
-                const cell = this.schedule[day][time];
-                if (cell) {
-                    row.push(`${cell.code} - ${cell.course} (${cell.teacher})`);
-                } else {
-                    row.push('');
+    canAssignToAllDays(course, days, time) {
+        return days.every(day => this.canAssign(course, day, time));
+    }
+    
+    /**
+     * Check if there's a teacher conflict at the specified day and time
+     * @param {string} teacher - Teacher name
+     * @param {string} day - Day to check
+     * @param {string} time - Time slot to check
+     * @returns {boolean} - True if there's a conflict
+     */
+    hasTeacherConflict(teacher, day, time) {
+        // Check all time slots for the teacher
+        for (const d of this.days) {
+            for (const t of this.timeSlots) {
+                if (this.grid[d][t] !== null && 
+                    this.grid[d][t].teacher === teacher &&
+                    ((d === day && t === time) || (d === day && this.areConsecutiveTimeSlots(t, time)))) {
+                    return true;
                 }
             }
-            
-            formattedSchedule.push(row);
         }
         
-        return formattedSchedule;
+        return false;
+    }
+    
+    /**
+     * Check if two time slots are consecutive
+     * @param {string} time1 - First time slot
+     * @param {string} time2 - Second time slot
+     * @returns {boolean} - True if time slots are consecutive
+     */
+    areConsecutiveTimeSlots(time1, time2) {
+        const index1 = this.timeSlots.indexOf(time1);
+        const index2 = this.timeSlots.indexOf(time2);
+        
+        return Math.abs(index1 - index2) === 1;
+    }
+    
+    /**
+     * Get scheduling statistics
+     * @param {Object} result - Scheduling result
+     * @returns {Object} - Statistics about the schedule
+     */
+    getScheduleStats(result) {
+        let totalAssigned = 0;
+        let totalUnassigned = result.unassignedCourses.length;
+        const teacherHours = {};
+        const dayUtilization = {};
+        
+        // Initialize day utilization
+        this.days.forEach(day => {
+            dayUtilization[day] = 0;
+        });
+        
+        // Count assigned courses and teacher hours
+        for (const day of this.days) {
+            for (const time of this.timeSlots) {
+                const cell = result.grid[day][time];
+                if (cell !== null) {
+                    totalAssigned++;
+                    dayUtilization[day]++;
+                    
+                    const teacher = cell.teacher;
+                    teacherHours[teacher] = (teacherHours[teacher] || 0) + 1;
+                }
+            }
+        }
+        
+        return {
+            totalAssigned,
+            totalUnassigned,
+            assignmentRate: totalAssigned / (totalAssigned + totalUnassigned) * 100,
+            teacherHours,
+            dayUtilization
+        };
     }
 }
 
 /**
- * Function to generate a schedule from course data
- * @param {Array} courses - Array of course objects
- * @returns {Object} The generated schedule
+ * Helper function to create a course object
+ * @param {string} courseCode - Course code
+ * @param {string} courseName - Course name
+ * @param {string} teacher - Teacher name
+ * @param {number} hours - Course hours per week
+ * @param {Array} days - Specific days (optional)
+ * @param {Array} timePreferences - Preferred time slots (optional)
+ * @returns {Object} - Course object
  */
-function generateSchedule(courses) {
-    console.log("Generating schedule for courses:", courses);
-    
-    const solver = new ScheduleSolver();
-    const result = solver.solveSchedule(courses);
-    
+function createCourse(courseCode, courseName, teacher, hours, days = [], timePreferences = null) {
     return {
-        schedule: result.schedule,
-        formattedSchedule: solver.formatSchedule(),
-        assignedCourses: result.assignedCourses,
-        unassignedCourses: result.unassignedCourses
+        courseCode,
+        courseName,
+        teacher,
+        hours,
+        days,
+        timePreferences
     };
 }
+
+/**
+ * Generate a schedule from a list of courses
+ * @param {Array} courses - List of courses to schedule
+ * @returns {Object} - Scheduling result
+ */
+function generateSchedule(courses) {
+    const solver = new ScheduleSolver();
+    const result = solver.solve(courses);
+    const stats = solver.getScheduleStats(result);
+    
+    return {
+        schedule: result.grid,
+        unassignedCourses: result.unassignedCourses,
+        stats: stats
+    };
+}
+
+// Export functions for use in the application
+window.ScheduleSolver = ScheduleSolver;
+window.createCourse = createCourse;
+window.generateSchedule = generateSchedule;
