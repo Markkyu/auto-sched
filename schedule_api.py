@@ -1,149 +1,238 @@
 """
-REST API for the University Course Scheduler
-This Flask application provides REST endpoints for scheduling university courses
-using the Google OR-Tools based scheduler implementation.
+RESTful API for university course scheduling using OR-Tools
+This Flask application exposes the scheduling functionality as a web service
 """
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import json
 import traceback
+import time
 from schedule_solver_backend import ScheduleSolver
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)  # Enable Cross-Origin Resource Sharing
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Simple health check endpoint"""
-    return jsonify({"status": "healthy", "message": "Schedule API is running"})
+    """Basic health check endpoint"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': time.time(),
+        'message': 'Schedule API is running'
+    }), 200
 
 @app.route('/api/generate-schedule', methods=['POST'])
 def generate_schedule():
     """
     Generate an optimized schedule based on provided courses and constraints
     
-    Expected JSON request format:
+    Expected JSON format:
     {
         "courses": [
             {
                 "code": "CS101",
-                "name": "Intro to Computer Science",
-                "teacher": "Dr. Smith",
+                "name": "Introduction to Computer Science",
+                "teacher": "Prof. Smith",
                 "hours": 3,
                 "preferred_days": "MWF",
-                "priority": 5
+                "priority": 5,
+                "min_room_capacity": 100
             },
             ...
         ],
         "rooms": [
-            {
-                "name": "Room A",
-                "capacity": 40
-            },
+            {"id": "A101", "capacity": 30},
+            {"id": "B205", "capacity": 50},
             ...
         ],
         "time_limit_seconds": 30
     }
-    
-    Returns JSON response:
-    {
-        "success": true,
-        "schedule": {
-            "mon": {
-                "8:00": [{"code": "CS101", "name": "...", "teacher": "...", "room": "..."}],
-                ...
-            },
-            ...
-        },
-        "scheduled_count": 10,
-        "total_count": 12,
-        "solve_time": 2.5,
-        "status": "OPTIMAL"
-    }
     """
     try:
+        # Parse request data
         data = request.json
-        
-        if not data or not isinstance(data, dict):
-            return jsonify({"success": False, "message": "Invalid request format"}), 400
-        
-        # Validate request data
-        if not data.get('courses') or not isinstance(data['courses'], list):
-            return jsonify({"success": False, "message": "Courses data is required"}), 400
+        if not data:
+            return jsonify({
+                'success': False,
+                'message': 'No data provided'
+            }), 400
         
         # Initialize solver
         solver = ScheduleSolver()
         
-        # Add rooms if provided
-        if data.get('rooms') and isinstance(data['rooms'], list):
+        # Add rooms (if provided)
+        if 'rooms' in data and data['rooms']:
             for room in data['rooms']:
-                solver.add_room(
-                    name=room.get('name', 'Unknown Room'),
-                    capacity=int(room.get('capacity', 30))
-                )
+                solver.add_room(room['id'], room['capacity'])
         
         # Add courses
+        if 'courses' not in data or not data['courses']:
+            return jsonify({
+                'success': False,
+                'message': 'No courses provided'
+            }), 400
+        
         for course in data['courses']:
             solver.add_course(
-                code=course.get('code', 'Unknown'),
-                name=course.get('name', 'Unknown Course'),
-                teacher=course.get('teacher', 'Unknown Teacher'),
-                hours=float(course.get('hours', 3)),
+                code=course['code'],
+                name=course['name'],
+                teacher=course['teacher'],
+                hours=course['hours'],
                 preferred_days=course.get('preferred_days', 'any'),
-                priority=int(course.get('priority', 3))
+                priority=course.get('priority', 3),
+                min_room_capacity=course.get('min_room_capacity', 30)
             )
         
-        # Solve the scheduling problem
-        time_limit = int(data.get('time_limit_seconds', 30))
-        result = solver.solve(time_limit_seconds=time_limit)
+        # Set time limit (with reasonable default)
+        time_limit = data.get('time_limit_seconds', 30)
         
-        return jsonify(result)
+        # Generate schedule
+        start_time = time.time()
+        result = solver.solve(time_limit_seconds=time_limit)
+        end_time = time.time()
+        
+        # Add extra metadata
+        result['processing_time'] = end_time - start_time
+        result['api_version'] = '1.0'
+        
+        return jsonify(result), 200
     
     except Exception as e:
-        # Log the error
-        traceback.print_exc()
+        # Log the error (would go to application logs)
+        print(f"Error generating schedule: {str(e)}")
+        print(traceback.format_exc())
+        
         return jsonify({
-            "success": False,
-            "message": f"Error generating schedule: {str(e)}"
+            'success': False,
+            'message': f'Error generating schedule: {str(e)}',
+            'error_type': type(e).__name__
         }), 500
 
-@app.route('/api/examples/sample-schedule', methods=['GET'])
-def sample_schedule():
+@app.route('/api/validate-input', methods=['POST'])
+def validate_input():
     """
-    Generate a sample schedule for demonstration purposes
-    
-    Returns a pre-defined sample schedule in the same format as the generate-schedule endpoint
+    Validate input data without generating a full schedule
+    Useful for checking if the courses and constraints are properly formatted
     """
-    solver = ScheduleSolver()
+    try:
+        data = request.json
+        if not data:
+            return jsonify({
+                'valid': False,
+                'message': 'No data provided'
+            }), 400
+        
+        # Validate courses
+        if 'courses' not in data or not data['courses']:
+            return jsonify({
+                'valid': False,
+                'message': 'No courses provided'
+            }), 400
+        
+        issues = []
+        for i, course in enumerate(data['courses']):
+            required_fields = ['code', 'name', 'teacher', 'hours']
+            for field in required_fields:
+                if field not in course:
+                    issues.append(f"Course {i+1} is missing required field: {field}")
+            
+            if 'hours' in course and (not isinstance(course['hours'], int) or course['hours'] < 1 or course['hours'] > 10):
+                issues.append(f"Course {i+1} ({course.get('code', 'unknown')}): Hours must be an integer between 1 and 10")
+            
+            if 'preferred_days' in course and course['preferred_days'] not in ['MWF', 'TTh', 'any']:
+                issues.append(f"Course {i+1} ({course.get('code', 'unknown')}): Preferred days must be 'MWF', 'TTh', or 'any'")
+        
+        # Validate rooms (if provided)
+        if 'rooms' in data and data['rooms']:
+            for i, room in enumerate(data['rooms']):
+                if 'id' not in room:
+                    issues.append(f"Room {i+1} is missing required field: id")
+                if 'capacity' not in room:
+                    issues.append(f"Room {i+1} is missing required field: capacity")
+                elif not isinstance(room['capacity'], int) or room['capacity'] < 1:
+                    issues.append(f"Room {i+1} ({room.get('id', 'unknown')}): Capacity must be a positive integer")
+        
+        if issues:
+            return jsonify({
+                'valid': False,
+                'issues': issues
+            }), 400
+        
+        return jsonify({
+            'valid': True,
+            'message': 'Input data is valid'
+        }), 200
     
-    # Add rooms
-    solver.add_room("Room A", 40)
-    solver.add_room("Room B", 30)
-    
-    # Add sample courses
-    solver.add_course("CS101", "Intro to Computer Science", "Dr. Smith", 3, "MWF", 5)
-    solver.add_course("MATH101", "Calculus I", "Dr. Johnson", 3, "MWF", 5)
-    solver.add_course("PHYS101", "Physics I", "Dr. Brown", 3, "TTh", 5)
-    solver.add_course("CHEM101", "Chemistry I", "Dr. Wilson", 3, "TTh", 4)
-    solver.add_course("BIO101", "Biology I", "Dr. Lee", 3, "any", 4)
-    
-    # Solve with a short time limit for quick response
-    result = solver.solve(time_limit_seconds=5)
-    
-    return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            'valid': False,
+            'message': f'Error validating input: {str(e)}'
+        }), 500
 
-@app.errorhandler(404)
-def not_found(e):
-    """Handle 404 errors"""
-    return jsonify({"success": False, "message": "Endpoint not found"}), 404
+@app.route('/api/examples/demo-schedule', methods=['GET'])
+def demo_schedule():
+    """Return a demo schedule configuration that can be used for testing"""
+    demo_data = {
+        "courses": [
+            {
+                "code": "CS101",
+                "name": "Introduction to Computer Science",
+                "teacher": "Prof. Smith",
+                "hours": 3,
+                "preferred_days": "MWF",
+                "priority": 5,
+                "min_room_capacity": 100
+            },
+            {
+                "code": "CS201",
+                "name": "Data Structures",
+                "teacher": "Prof. Johnson",
+                "hours": 3,
+                "preferred_days": "TTh",
+                "priority": 4,
+                "min_room_capacity": 50
+            },
+            {
+                "code": "MATH101",
+                "name": "Calculus I",
+                "teacher": "Prof. Williams",
+                "hours": 4,
+                "preferred_days": "MWF",
+                "priority": 5,
+                "min_room_capacity": 150
+            },
+            {
+                "code": "ENG210",
+                "name": "Creative Writing",
+                "teacher": "Prof. Davis",
+                "hours": 3,
+                "preferred_days": "TTh",
+                "priority": 3,
+                "min_room_capacity": 30
+            },
+            {
+                "code": "PHYS101",
+                "name": "Physics I",
+                "teacher": "Prof. Garcia",
+                "hours": 4,
+                "preferred_days": "MWF",
+                "priority": 4,
+                "min_room_capacity": 100
+            }
+        ],
+        "rooms": [
+            {"id": "A101", "capacity": 30},
+            {"id": "B205", "capacity": 50},
+            {"id": "C301", "capacity": 100},
+            {"id": "D102", "capacity": 150}
+        ],
+        "time_limit_seconds": 10
+    }
+    
+    return jsonify(demo_data), 200
 
-@app.errorhandler(405)
-def method_not_allowed(e):
-    """Handle 405 errors"""
-    return jsonify({"success": False, "message": "Method not allowed"}), 405
-
-if __name__ == "__main__":
-    # Run the application on port 5000 in debug mode
-    # In production, you should use a proper WSGI server like gunicorn
-    # Example: gunicorn -w 4 schedule_api:app
-    app.run(debug=True)
+if __name__ == '__main__':
+    # Run the Flask app (for development only)
+    # For production, use Gunicorn or another WSGI server
+    app.run(debug=True, host='0.0.0.0', port=5000)
