@@ -1,449 +1,385 @@
 /**
- * ScheduleSolver - A constraint satisfaction algorithm for university course scheduling
- * 
- * This implementation handles scheduling of university courses while respecting
- * constraints such as teacher availability and course hours.
+ * ScheduleSolver class for university course scheduling
+ * A CSP-inspired approach to scheduling courses with constraints
  */
 class ScheduleSolver {
     constructor() {
         this.courses = [];
-        this.timeSlots = this.generateTimeSlots();
-        this.schedule = this.initializeEmptySchedule();
-    }
-
-    /**
-     * Generate all available time slots
-     * @returns {Object} Time slots organized by day and time
-     */
-    generateTimeSlots() {
-        const days = ['mon', 'tue', 'wed', 'thu', 'fri'];
-        const startHour = 8; // 8 AM
-        const endHour = 18;  // 6 PM
-        const slots = {};
-
-        days.forEach(day => {
-            slots[day] = [];
-            for (let hour = startHour; hour < endHour; hour++) {
-                slots[day].push(`${hour}:00`);
-                slots[day].push(`${hour}:30`);
-            }
-        });
-
-        return slots;
-    }
-
-    /**
-     * Initialize an empty schedule
-     * @returns {Object} Empty schedule template
-     */
-    initializeEmptySchedule() {
-        const days = ['mon', 'tue', 'wed', 'thu', 'fri'];
-        const schedule = {};
-
-        days.forEach(day => {
-            schedule[day] = {};
-            this.timeSlots[day].forEach(timeSlot => {
-                schedule[day][timeSlot] = [];
-            });
-        });
-
-        return schedule;
+        this.timeSlots = ["8:00", "9:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
+        this.days = ["mon", "tue", "wed", "thu", "fri"];
+        // Group days according to common patterns
+        this.dayPatterns = {
+            "MWF": ["mon", "wed", "fri"],
+            "TTh": ["tue", "thu"],
+            "any": this.days
+        };
     }
 
     /**
      * Add a course to be scheduled
-     * @param {string} code - Course code
+     * @param {string} code - Course code (e.g., CS101)
      * @param {string} name - Course name
      * @param {string} teacher - Teacher name
-     * @param {number} hours - Course duration in hours
+     * @param {number} hours - Hours per week (1-10)
      * @param {string} preferredDays - Preferred days pattern ('MWF', 'TTh', or 'any')
-     * @param {number} priority - Course priority (1-5)
+     * @param {number} priority - Priority level (1-5, where 5 is highest)
      */
-    addCourse(code, name, teacher, hours, preferredDays, priority) {
+    addCourse(code, name, teacher, hours, preferredDays = 'any', priority = 3) {
         this.courses.push({
             code,
             name,
             teacher,
             hours,
             preferredDays,
-            priority: priority || 3, // Default to medium priority
+            priority,
             scheduled: false
         });
     }
 
     /**
-     * Solve the scheduling problem
-     * @returns {Object} Result of the scheduling attempt
+     * Solve the course scheduling problem
+     * @returns {Object} Result object with success flag, schedule, and statistics
      */
     solve() {
-        // Reset the schedule
-        this.schedule = this.initializeEmptySchedule();
-        
-        // Mark all courses as unscheduled
-        this.courses.forEach(course => {
-            course.scheduled = false;
+        // Sort courses by priority (highest first) and hours (highest first)
+        this.courses.sort((a, b) => {
+            if (b.priority !== a.priority) {
+                return b.priority - a.priority;
+            }
+            return b.hours - a.hours;
         });
 
-        // Sort courses by priority (highest first)
-        const sortedCourses = [...this.courses].sort((a, b) => b.priority - a.priority);
+        // Initialize empty schedule
+        const schedule = {};
+        this.days.forEach(day => {
+            schedule[day] = {};
+            this.timeSlots.forEach(time => {
+                schedule[day][time] = [];
+            });
+        });
+
+        // Track teachers' schedules to avoid conflicts
+        const teacherSchedule = {};
         
-        // Try different scheduling strategies
-        const schedulingStrategies = [
-            this.scheduleByPreferredDays.bind(this),
-            this.scheduleByTeacherLoad.bind(this),
-            this.scheduleFlexibly.bind(this)
-        ];
-
-        let unscheduledCourses = [...sortedCourses];
-        let previousUnscheduledCount = Infinity;
-
-        // Try each strategy until we can't improve further
-        for (const strategy of schedulingStrategies) {
-            const result = strategy(unscheduledCourses);
-            unscheduledCourses = result.unscheduledCourses;
-            
-            // If we've scheduled all courses or made no progress, move to next strategy
-            if (unscheduledCourses.length === 0 || unscheduledCourses.length >= previousUnscheduledCount) {
-                previousUnscheduledCount = unscheduledCourses.length;
-                continue;
-            }
-            
-            previousUnscheduledCount = unscheduledCourses.length;
-        }
-
-        // Prepare and return the result
-        if (unscheduledCourses.length === 0) {
-            return {
-                success: true,
-                schedule: this.schedule,
-                message: 'Successfully scheduled all courses'
-            };
-        } else {
-            const unscheduledCodes = unscheduledCourses.map(c => c.code).join(', ');
-            return {
-                success: false,
-                schedule: this.schedule,
-                unscheduledCourses: unscheduledCourses,
-                message: `Could not schedule the following courses: ${unscheduledCodes}`
-            };
-        }
-    }
-
-    /**
-     * Schedule courses by preferred days
-     * @param {Array} courses - Courses to be scheduled
-     * @returns {Object} Result with remaining unscheduled courses
-     */
-    scheduleByPreferredDays(courses) {
-        const unscheduledCourses = [];
-
-        for (const course of courses) {
-            if (course.scheduled) continue;
-            
-            let scheduled = false;
-            const days = this.getPreferredDays(course.preferredDays);
-            
-            // Try to schedule on preferred days
-            for (const day of days) {
-                scheduled = this.attemptScheduleCourse(course, [day]);
-                if (scheduled) break;
-            }
-            
-            if (!scheduled) {
-                unscheduledCourses.push(course);
+        // Process each course
+        let scheduledCount = 0;
+        const totalCount = this.courses.length;
+        
+        for (const course of this.courses) {
+            if (this.scheduleCourse(course, schedule, teacherSchedule)) {
+                scheduledCount++;
+                course.scheduled = true;
             }
         }
 
-        return { unscheduledCourses };
-    }
-
-    /**
-     * Schedule courses by teacher load
-     * @param {Array} courses - Courses to be scheduled
-     * @returns {Object} Result with remaining unscheduled courses
-     */
-    scheduleByTeacherLoad(courses) {
-        const unscheduledCourses = [];
-        const teacherLoadMap = this.calculateTeacherLoad();
-
-        // Group courses by teacher
-        const coursesByTeacher = {};
-        for (const course of courses) {
-            if (course.scheduled) continue;
-            
-            if (!coursesByTeacher[course.teacher]) {
-                coursesByTeacher[course.teacher] = [];
-            }
-            coursesByTeacher[course.teacher].push(course);
-        }
-
-        // Schedule teachers with heaviest load first
-        const teachers = Object.keys(coursesByTeacher).sort((a, b) => 
-            (teacherLoadMap[b] || 0) - (teacherLoadMap[a] || 0)
-        );
-
-        for (const teacher of teachers) {
-            const teacherCourses = coursesByTeacher[teacher];
-            
-            // Sort courses by priority
-            teacherCourses.sort((a, b) => b.priority - a.priority);
-            
-            for (const course of teacherCourses) {
-                const days = this.getAllPossibleDays();
-                const scheduled = this.attemptScheduleCourse(course, days);
-                
-                if (!scheduled) {
-                    unscheduledCourses.push(course);
+        // If not all courses could be scheduled in the first pass,
+        // try again with different strategies
+        if (scheduledCount < totalCount) {
+            for (const course of this.courses) {
+                if (!course.scheduled) {
+                    // Try alternative scheduling strategies
+                    if (this.scheduleCourseWithRelaxedConstraints(course, schedule, teacherSchedule)) {
+                        scheduledCount++;
+                        course.scheduled = true;
+                    }
                 }
             }
         }
 
-        return { unscheduledCourses };
+        // Return the result
+        return {
+            success: scheduledCount === totalCount,
+            schedule,
+            scheduledCount,
+            totalCount,
+            message: scheduledCount === totalCount 
+                ? "All courses scheduled successfully" 
+                : `Could not schedule ${totalCount - scheduledCount} courses due to constraints`
+        };
     }
 
     /**
-     * Schedule courses flexibly (ignoring preferred days)
-     * @param {Array} courses - Courses to be scheduled
-     * @returns {Object} Result with remaining unscheduled courses
+     * Schedule a single course based on its constraints
+     * @param {Object} course - Course to schedule
+     * @param {Object} schedule - Current schedule
+     * @param {Object} teacherSchedule - Current teacher schedule
+     * @returns {boolean} True if scheduled successfully
      */
-    scheduleFlexibly(courses) {
-        const unscheduledCourses = [];
-        const allDays = this.getAllPossibleDays();
-
-        for (const course of courses) {
-            if (course.scheduled) continue;
-            
-            const scheduled = this.attemptScheduleCourse(course, allDays);
-            
-            if (!scheduled) {
-                unscheduledCourses.push(course);
+    scheduleCourse(course, schedule, teacherSchedule) {
+        // Get available days based on preference
+        const availableDays = this.dayPatterns[course.preferredDays] || this.days;
+        
+        // For courses with > 1 hour, we need to decide scheduling strategy
+        let schedulingStrategy;
+        
+        if (course.hours <= 1) {
+            schedulingStrategy = 'single';
+        } else if (course.preferredDays === 'MWF' && course.hours === 3) {
+            schedulingStrategy = 'mwf';
+        } else if (course.preferredDays === 'TTh' && course.hours === 3) {
+            schedulingStrategy = 'tth_longer';
+        } else if (course.preferredDays === 'TTh' && course.hours <= 2) {
+            schedulingStrategy = 'tth';
+        } else {
+            // Default to distributing evenly
+            schedulingStrategy = 'distribute';
+        }
+        
+        return this.applySchedulingStrategy(
+            schedulingStrategy, 
+            course, 
+            schedule, 
+            teacherSchedule, 
+            availableDays
+        );
+    }
+    
+    /**
+     * Apply a specific scheduling strategy for a course
+     * @param {string} strategy - Strategy name
+     * @param {Object} course - Course to schedule
+     * @param {Object} schedule - Current schedule
+     * @param {Object} teacherSchedule - Current teacher schedule
+     * @param {Array} availableDays - Available days for scheduling
+     * @returns {boolean} True if scheduled successfully
+     */
+    applySchedulingStrategy(strategy, course, schedule, teacherSchedule, availableDays) {
+        switch (strategy) {
+            case 'single':
+                // For 1-hour courses, just find any available slot
+                return this.scheduleInSingleSlot(course, schedule, teacherSchedule, availableDays);
+                
+            case 'mwf':
+                // Monday-Wednesday-Friday pattern (1 hour each day)
+                return this.scheduleMWF(course, schedule, teacherSchedule);
+                
+            case 'tth':
+                // Tuesday-Thursday pattern (1 hour each day)
+                return this.scheduleTTh(course, schedule, teacherSchedule);
+                
+            case 'tth_longer':
+                // Tuesday-Thursday pattern (1.5 hours each day)
+                return this.scheduleTThLonger(course, schedule, teacherSchedule);
+                
+            case 'distribute':
+                // Distribute hours across available days
+                return this.scheduleDistributed(course, schedule, teacherSchedule, availableDays);
+                
+            default:
+                // Default to distributed scheduling
+                return this.scheduleDistributed(course, schedule, teacherSchedule, availableDays);
+        }
+    }
+    
+    /**
+     * Try to schedule a course with relaxed constraints
+     * @param {Object} course - Course to schedule
+     * @param {Object} schedule - Current schedule
+     * @param {Object} teacherSchedule - Current teacher schedule
+     * @returns {boolean} True if scheduled successfully
+     */
+    scheduleCourseWithRelaxedConstraints(course, schedule, teacherSchedule) {
+        // Try scheduling on any day, regardless of preference
+        return this.scheduleDistributed(course, schedule, teacherSchedule, this.days);
+    }
+    
+    /**
+     * Schedule a course in a single time slot
+     */
+    scheduleInSingleSlot(course, schedule, teacherSchedule, availableDays) {
+        for (const time of this.timeSlots) {
+            for (const day of availableDays) {
+                if (!this.hasConflict(course.teacher, day, time, teacherSchedule)) {
+                    this.addToSchedule(course, schedule, teacherSchedule, day, time);
+                    return true;
+                }
             }
         }
-
-        return { unscheduledCourses };
+        return false;
     }
-
+    
     /**
-     * Attempt to schedule a course on given days
-     * @param {Object} course - Course to schedule
-     * @param {Array} days - Days to try scheduling on
-     * @returns {boolean} Whether the course was successfully scheduled
+     * Schedule a course in Monday-Wednesday-Friday pattern
      */
-    attemptScheduleCourse(course, days) {
-        // MWF or TTh scheduling patterns based on course hours
-        const patterns = this.getSchedulingPatterns(course.hours, course.preferredDays);
+    scheduleMWF(course, schedule, teacherSchedule) {
+        const mwfDays = ["mon", "wed", "fri"];
         
-        for (const pattern of patterns) {
-            const availableSlots = this.findAvailableTimeSlots(course, days, pattern);
+        // Check for available slots at the same time on all three days
+        for (const time of this.timeSlots) {
+            let available = true;
             
-            if (availableSlots.length > 0) {
-                // Use the first available slot
-                const slot = availableSlots[0];
-                this.scheduleCourseAtSlot(course, slot.days, slot.startTime, pattern);
-                course.scheduled = true;
+            // Check if all required days are available at this time
+            for (const day of mwfDays) {
+                if (this.hasConflict(course.teacher, day, time, teacherSchedule)) {
+                    available = false;
+                    break;
+                }
+            }
+            
+            if (available) {
+                // Schedule at the same time on all three days
+                for (const day of mwfDays) {
+                    this.addToSchedule(course, schedule, teacherSchedule, day, time);
+                }
                 return true;
             }
         }
         
         return false;
     }
-
+    
     /**
-     * Find available time slots for a course
-     * @param {Object} course - Course to schedule
-     * @param {Array} days - Days to search in
-     * @param {Object} pattern - Scheduling pattern to use
-     * @returns {Array} List of available slots
+     * Schedule a course in Tuesday-Thursday pattern
      */
-    findAvailableTimeSlots(course, days, pattern) {
-        const availableSlots = [];
-        const slotCount = pattern.slotsNeeded;
+    scheduleTTh(course, schedule, teacherSchedule) {
+        const tthDays = ["tue", "thu"];
         
-        // For MWF pattern, we need all three days
-        if (pattern.type === 'MWF' && days.length < 3) {
-            return [];
-        }
-        
-        // For TTh pattern, we need both days
-        if (pattern.type === 'TTh' && days.length < 2) {
-            return [];
-        }
-
-        // Get appropriate days based on pattern
-        let schedulingDays = [];
-        if (pattern.type === 'MWF') {
-            schedulingDays = ['mon', 'wed', 'fri'].filter(day => days.includes(day));
-            if (schedulingDays.length < 3) return []; // Need all MWF days
-        } else if (pattern.type === 'TTh') {
-            schedulingDays = ['tue', 'thu'].filter(day => days.includes(day));
-            if (schedulingDays.length < 2) return []; // Need both T and Th
-        } else {
-            schedulingDays = days;
-        }
-        
-        // Check each time slot in the day(s)
-        for (const day of schedulingDays) {
-            const slots = this.timeSlots[day];
+        // Check for available slots at the same time on both days
+        for (const time of this.timeSlots) {
+            let available = true;
             
-            for (let i = 0; i <= slots.length - slotCount; i++) {
-                const startTime = slots[i];
-                const endTime = slots[i + slotCount - 1];
-                
-                // Check if this block is free on all required days
-                const conflict = this.hasConflict(course, schedulingDays, startTime, endTime);
-                
-                if (!conflict) {
-                    availableSlots.push({
-                        days: schedulingDays,
-                        startTime,
-                        endTime
-                    });
+            // Check if all required days are available at this time
+            for (const day of tthDays) {
+                if (this.hasConflict(course.teacher, day, time, teacherSchedule)) {
+                    available = false;
+                    break;
                 }
             }
-        }
-        
-        return availableSlots;
-    }
-
-    /**
-     * Check if there is a scheduling conflict
-     * @param {Object} course - Course to check
-     * @param {Array} days - Days to check
-     * @param {string} startTime - Start time
-     * @param {string} endTime - End time
-     * @returns {boolean} Whether there is a conflict
-     */
-    hasConflict(course, days, startTime, endTime) {
-        // Get all slots between start and end time
-        const startIndex = this.timeSlots[days[0]].indexOf(startTime);
-        const endIndex = this.timeSlots[days[0]].indexOf(endTime);
-        
-        if (startIndex === -1 || endIndex === -1) {
-            return true; // Invalid time slot
-        }
-        
-        // Check each day and each slot in the time range
-        for (const day of days) {
-            for (let i = startIndex; i <= endIndex; i++) {
-                const timeSlot = this.timeSlots[day][i];
-                
-                // Check if teacher already has a course at this time
-                const teacherConflict = this.schedule[day][timeSlot].some(
-                    c => c.teacher === course.teacher
-                );
-                
-                if (teacherConflict) {
-                    return true;
+            
+            if (available) {
+                // Schedule at the same time on both days
+                for (const day of tthDays) {
+                    this.addToSchedule(course, schedule, teacherSchedule, day, time);
                 }
+                return true;
             }
         }
         
         return false;
     }
-
+    
     /**
-     * Schedule a course at specified time slot
-     * @param {Object} course - Course to schedule
-     * @param {Array} days - Days to schedule on
-     * @param {string} startTime - Start time
-     * @param {Object} pattern - Scheduling pattern
+     * Schedule a course in Tuesday-Thursday pattern with longer sessions
      */
-    scheduleCourseAtSlot(course, days, startTime, pattern) {
-        const startIndex = this.timeSlots[days[0]].indexOf(startTime);
+    scheduleTThLonger(course, schedule, teacherSchedule) {
+        const tthDays = ["tue", "thu"];
         
-        // Schedule the course for each required slot
-        for (const day of days) {
-            for (let i = 0; i < pattern.slotsNeeded; i++) {
-                const timeSlot = this.timeSlots[day][startIndex + i];
+        // Check for available consecutive slots on both days
+        for (let i = 0; i < this.timeSlots.length - 1; i++) {
+            const time1 = this.timeSlots[i];
+            const time2 = this.timeSlots[i + 1];
+            
+            let available = true;
+            
+            // Check if both time slots are available on both days
+            for (const day of tthDays) {
+                if (this.hasConflict(course.teacher, day, time1, teacherSchedule) || 
+                    this.hasConflict(course.teacher, day, time2, teacherSchedule)) {
+                    available = false;
+                    break;
+                }
+            }
+            
+            if (available) {
+                // Schedule in consecutive slots on both days
+                for (const day of tthDays) {
+                    this.addToSchedule(course, schedule, teacherSchedule, day, time1);
+                    
+                    // For the second hour, modify the course object to show it continues
+                    const continuedCourse = { ...course, continued: true };
+                    this.addToSchedule(continuedCourse, schedule, teacherSchedule, day, time2);
+                }
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Schedule a course distributed across available days
+     */
+    scheduleDistributed(course, schedule, teacherSchedule, availableDays) {
+        let remainingHours = course.hours;
+        const scheduledSlots = [];
+        
+        // Try to distribute evenly
+        for (const time of this.timeSlots) {
+            if (remainingHours <= 0) break;
+            
+            for (const day of availableDays) {
+                if (remainingHours <= 0) break;
                 
-                // Add course to this time slot
-                this.schedule[day][timeSlot].push({
-                    code: course.code,
-                    name: course.name,
-                    teacher: course.teacher
-                });
-            }
-        }
-    }
-
-    /**
-     * Calculate the total teaching load per teacher
-     * @returns {Object} Map of teacher to total hours
-     */
-    calculateTeacherLoad() {
-        const teacherLoad = {};
-        
-        for (const course of this.courses) {
-            if (!teacherLoad[course.teacher]) {
-                teacherLoad[course.teacher] = 0;
-            }
-            teacherLoad[course.teacher] += course.hours;
-        }
-        
-        return teacherLoad;
-    }
-
-    /**
-     * Get scheduling patterns based on course hours
-     * @param {number} hours - Course duration in hours
-     * @param {string} preferredDays - Preferred days pattern
-     * @returns {Array} List of possible scheduling patterns
-     */
-    getSchedulingPatterns(hours, preferredDays) {
-        const patterns = [];
-        
-        // 1-hour courses: 2 30-min slots
-        if (hours === 1) {
-            patterns.push({ type: 'single', slotsNeeded: 2 });
-        }
-        // 1.5-hour courses: 3 30-min slots
-        else if (hours === 1.5) {
-            if (preferredDays === 'TTh') {
-                patterns.push({ type: 'TTh', slotsNeeded: 3 });
-            } else {
-                patterns.push({ type: 'single', slotsNeeded: 3 });
-            }
-        }
-        // 2-hour courses: 4 30-min slots
-        else if (hours === 2) {
-            patterns.push({ type: 'single', slotsNeeded: 4 });
-        }
-        // 3-hour courses: Split or single block
-        else if (hours === 3) {
-            if (preferredDays === 'MWF') {
-                patterns.push({ type: 'MWF', slotsNeeded: 2 }); // 3 1-hour sessions
-            } else if (preferredDays === 'TTh') {
-                patterns.push({ type: 'TTh', slotsNeeded: 3 }); // 2 1.5-hour sessions
-            } else {
-                patterns.push({ type: 'single', slotsNeeded: 6 }); // One 3-hour block
+                if (!this.hasConflict(course.teacher, day, time, teacherSchedule)) {
+                    this.addToSchedule(course, schedule, teacherSchedule, day, time);
+                    scheduledSlots.push({ day, time });
+                    remainingHours--;
+                }
             }
         }
         
-        return patterns;
+        // If we couldn't schedule all hours, clean up partial scheduling and return false
+        if (remainingHours > 0) {
+            // Remove the partially scheduled course
+            for (const slot of scheduledSlots) {
+                this.removeFromSchedule(course, schedule, teacherSchedule, slot.day, slot.time);
+            }
+            return false;
+        }
+        
+        return true;
     }
-
+    
     /**
-     * Get preferred days based on pattern
-     * @param {string} preferredDays - Preferred days pattern
-     * @returns {Array} List of days to try
+     * Add a course to the schedule
      */
-    getPreferredDays(preferredDays) {
-        switch (preferredDays) {
-            case 'MWF':
-                return ['mon', 'wed', 'fri'];
-            case 'TTh':
-                return ['tue', 'thu'];
-            case 'any':
-            default:
-                return this.getAllPossibleDays();
+    addToSchedule(course, schedule, teacherSchedule, day, time) {
+        // Add to main schedule
+        schedule[day][time].push({
+            code: course.code,
+            name: course.name,
+            teacher: course.teacher,
+            continued: course.continued || false
+        });
+        
+        // Add to teacher's schedule
+        if (!teacherSchedule[course.teacher]) {
+            teacherSchedule[course.teacher] = {};
+        }
+        
+        if (!teacherSchedule[course.teacher][day]) {
+            teacherSchedule[course.teacher][day] = {};
+        }
+        
+        teacherSchedule[course.teacher][day][time] = course.code;
+    }
+    
+    /**
+     * Remove a course from the schedule (for cleanup)
+     */
+    removeFromSchedule(course, schedule, teacherSchedule, day, time) {
+        // Remove from main schedule
+        schedule[day][time] = schedule[day][time].filter(c => c.code !== course.code);
+        
+        // Remove from teacher's schedule
+        if (teacherSchedule[course.teacher] && 
+            teacherSchedule[course.teacher][day] && 
+            teacherSchedule[course.teacher][day][time]) {
+            delete teacherSchedule[course.teacher][day][time];
         }
     }
-
+    
     /**
-     * Get all possible days
-     * @returns {Array} List of all days
+     * Check if scheduling would create a conflict
      */
-    getAllPossibleDays() {
-        return ['mon', 'tue', 'wed', 'thu', 'fri'];
+    hasConflict(teacher, day, time, teacherSchedule) {
+        // Check teacher availability
+        if (teacherSchedule[teacher] && 
+            teacherSchedule[teacher][day] && 
+            teacherSchedule[teacher][day][time]) {
+            return true;
+        }
+        
+        return false;
     }
 }
