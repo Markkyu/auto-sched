@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>University Course Scheduler</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>University Course Scheduler</h1>
+        <div class="user-info">
+            <select id="department-selector">
+                <option value="general-education">General Education</option>
+                <option value="computer-science">Computer Science</option>
+                <option value="mathematics">Mathematics</option>
+                <option value="other">Other Department</option>
+            </select>
+            <button id="login-btn">Login as Department</button>
+        </div>
+    </header>
+
+    <main>
+        <section id="workflow-indicator">
+            <div class="workflow-step active" data-department="general-education">
+                <span class="step-number">1</span>
+                <span class="step-name">General Education</span>
+            </div>
+            <div class="workflow-connector"></div>
+            <div class="workflow-step" data-department="computer-science">
+                <span class="step-number">2</span>
+                <span class="step-name">Computer Science</span>
+            </div>
+            <div class="workflow-connector"></div>
+            <div class="workflow-step" data-department="mathematics">
+                <span class="step-number">3</span>
+                <span class="step-name">Mathematics</span>
+            </div>
+            <div class="workflow-connector"></div>
+            <div class="workflow-step" data-department="other">
+                <span class="step-number">4</span>
+                <span class="step-name">Other Departments</span>
+            </div>
+        </section>
+
+        <section class="scheduling-container">
+            <div class="form-container">
+                <form id="course-form">
+                    <h2>Add Course</h2>
+                    <div class="form-group">
+                        <label for="course-code">Course Code:</label>
+                        <input type="text" id="course-code" required placeholder="e.g., CS101">
+                    </div>
+                    <div class="form-group">
+                        <label for="course-name">Course Name:</label>
+                        <input type="text" id="course-name" required placeholder="e.g., Introduction to Programming">
+                    </div>
+                    <div class="form-group">
+                        <label for="course-hours">Weekly Hours:</label>
+                        <input type="number" id="course-hours" min="1" max="6" required value="3">
+                    </div>
+                    <div class="form-group">
+                        <label for="teacher-name">Teacher:</label>
+                        <input type="text" id="teacher-name" required placeholder="e.g., Dr. Smith">
+                    </div>
+                    <div class="form-group">
+                        <label for="course-type">Course Type:</label>
+                        <select id="course-type">
+                            <option value="ge">General Education</option>
+                            <option value="cs">Computer Science</option>
+                            <option value="math">Mathematics</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="preferred-schedule">Preferred Schedule:</label>
+                        <select id="preferred-schedule">
+                            <option value="MWF">MWF</option>
+                            <option value="TTh">TTh</option>
+                            <option value="any">Any</option>
+                        </select>
+                    </div>
+                    <button type="submit" id="add-course-btn">Add to Queue</button>
+                </form>
+
+                <div class="course-queue">
+                    <h2>Course Queue</h2>
+                    <ul id="queue-list"></ul>
+                    <div class="queue-actions">
+                        <button id="generate-schedule-btn">Generate Schedule</button>
+                        <button id="clear-queue-btn">Clear Queue</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timetable-container">
+                <h2>Generated Timetable</h2>
+                <div id="department-status-message" class="status-message">
+                    Scheduling phase: General Education Department
+                </div>
+                <div class="timetable-controls">
+                    <button id="submit-schedule-btn" disabled>Submit & Lock Schedule</button>
+                    <button id="notify-next-dept-btn" disabled>Notify Next Department</button>
+                    <button id="export-schedule-btn">Export Schedule</button>
+                </div>
+                <div class="timetable-wrapper">
+                    <table id="timetable">
+                        <thead>
+                            <tr>
+                                <th>Time/Day</th>
+                                <th>Monday</th>
+                                <th>Tuesday</th>
+                                <th>Wednesday</th>
+                                <th>Thursday</th>
+                                <th>Friday</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Filled by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="loading-indicator" class="hidden">
+                    <div class="spinner"></div>
+                    <p>Generating schedule, please wait...</p>
+                </div>
+                <div id="schedule-status" class="status-message"></div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>University Course Scheduling System - Hierarchical Department Priority Model</p>
+    </footer>
+
+    <script src="schedule-solver.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
